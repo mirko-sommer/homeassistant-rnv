@@ -199,6 +199,13 @@ class RNVBaseSensor(Entity):
         except (KeyError, TypeError):
             return None
 
+        capacity_levels = {
+            "NA": "Nicht vorhanden",
+            "I": "I - empty - leer",
+            "II": "II - light - mittel-voll",
+            "III": "III - full - voll",
+        }
+
         now = datetime.now(UTC)
         journeys_info = []
 
@@ -229,6 +236,9 @@ class RNVBaseSensor(Entity):
                     continue
 
                 if dep_time > now:
+                    load_type_raw = journey.get("loads", [{}])[0].get("loadType")
+                    load_ratio_raw = journey.get("loads", [{}])[0].get("ratio")
+
                     journey_info = {
                         "planned_time": planned_str,
                         "realtime_time": realtime_str,
@@ -238,8 +248,10 @@ class RNVBaseSensor(Entity):
                         "destination": stop.get("destinationLabel"),
                         "cancelled": journey.get("cancelled", False),
                         "platform": platform_label,
-                        "load_ratio": journey.get("loads", [{}])[0].get("ratio"),
-                        "load_type": journey.get("loads", [{}])[0].get("loadType"),
+                        "load_ratio": f"{round(load_ratio_raw * 100)}%"
+                        if isinstance(load_ratio_raw, (float, int))
+                        else None,
+                        "load_type": capacity_levels.get(load_type_raw),
                     }
                     journeys_info.append((dep_time, journey_info))
 
