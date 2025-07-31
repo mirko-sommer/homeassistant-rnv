@@ -1,0 +1,17 @@
+{
+  "domain": "rnv",
+  "name": "RNV Public Transport",
+  "version": "1.0.0",
+  "codeowners": [
+    "@mirko-sommer"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://www.home-assistant.io/integrations/rnv",
+  "homekit": {},
+  "iot_class": "cloud_polling",
+  "quality_scale": "bronze",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": []
+}
