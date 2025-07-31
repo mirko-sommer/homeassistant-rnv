@@ -176,9 +176,12 @@ class RNVBaseSensor(Entity):
                 if self._line and line != self._line:
                     continue
 
-                dep_str = stop.get("realtimeDeparture", {}).get(
-                    "isoString"
-                ) or stop.get("plannedDeparture", {}).get("isoString")
+                realtime_str = stop.get("realtimeDeparture", {}).get("isoString")
+                planned_str = stop.get("plannedDeparture", {}).get("isoString")
+                if realtime_str:
+                    dep_str = realtime_str
+                else:
+                    dep_str = planned_str
 
                 if not dep_str:
                     continue
@@ -225,7 +228,10 @@ class RNVBaseSensor(Entity):
 
                 realtime_str = stop.get("realtimeDeparture", {}).get("isoString")
                 planned_str = stop.get("plannedDeparture", {}).get("isoString")
-                dep_str = realtime_str or planned_str
+                if realtime_str:
+                    dep_str = realtime_str
+                else:
+                    dep_str = planned_str
 
                 if not dep_str:
                     continue
@@ -254,6 +260,8 @@ class RNVBaseSensor(Entity):
                         "load_type": capacity_levels.get(load_type_raw),
                     }
                     journeys_info.append((dep_time, journey_info))
+
+        journeys_info.sort(key=lambda tup: tup[0])
 
         if index is not None and index < len(journeys_info):
             return journeys_info[index][1]
