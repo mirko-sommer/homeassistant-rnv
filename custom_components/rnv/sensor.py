@@ -4,67 +4,46 @@ This module defines Home Assistant sensor entities for tracking public transport
 from RNV stations, including next, second, and third departures, with platform and line filtering.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 import logging
-import time
+from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CLIENT_API_URL, OAUTH_URL_TEMPLATE
-from .data_hub_python_client.ClientFunctions import ClientFunctions
+from .coordinator import RNVCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class RNVBaseSensor(Entity):
+class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], Entity):
     """Base sensor for RNV departures.
 
     Handles fetching and parsing departure data for a specific station, platform, and line.
     Provides common attributes and methods for derived departure sensors.
     """
 
-    should_poll = True
     _attr_has_entity_name = True
     _attr_device_class = "timestamp"
     _attr_icon = "mdi:bus-clock"
 
     def __init__(
         self,
-        options,
-        at_info,
-        tenantid,
-        hass: HomeAssistant,
-        station_id,
-        platform,
-        line,
-        departure_index,
+        coordinator: RNVCoordinator,
+        station_id: str,
+        platform: str,
+        line: str,
+        departure_index: int,
     ) -> None:
-        """Initialize the RNVBaseSensor.
-
-        Args:
-            options: Dictionary of client options.
-            at_info: Access token information.
-            tenantid: Tenant ID for authentication.
-            hass: Home Assistant instance.
-            station_id: ID of the station.
-            platform: Platform label (optional).
-            line: Line label (optional).
-            departure_index: Index of the departure to track.
-        """
-        self._cf = ClientFunctions(options)
-        self._at_info = at_info
-        self._tenantid = tenantid
-        self._hass = hass
+        """Initialize the RNVBaseSensor."""
+        super().__init__(coordinator)
         self._station_id = station_id
         self._platform = platform or ""
         self._line = line or ""
         self._departure_index = departure_index
-        self._attr_state = None
-        self._options = options
-        self._query_result = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -76,86 +55,10 @@ class RNVBaseSensor(Entity):
             model="Live Departures",
         )
 
-    async def async_update(self) -> None:
-        """Update the sensor with the latest departure data.
-
-        Refreshes the access token if expired, queries the RNV API for departure information,
-        and updates the sensor state with the latest results.
-        Raises ConfigEntryAuthFailed if authentication fails.
-        """
-        expires_on = int(self._at_info.get("expires_on", 0))
-        now_ts = int(time.time())
-        if now_ts >= expires_on:
-            new_at_info = await self._hass.async_add_executor_job(
-                self._cf.request_access_token
-            )
-            if new_at_info and "access_token" in new_at_info:
-                self._at_info = new_at_info
-            else:
-                _LOGGER.error("Failed to refresh access token")
-                raise ConfigEntryAuthFailed("Token expired or authentication failed.")
-
-        current_utc = (
-            datetime.now(UTC)
-            .replace(second=0, microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z")
-        )
-
-        current_utc_offset_plus_1 = (
-            (datetime.now(UTC) + timedelta(hours=1))
-            .replace(second=0, microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z")
-        )
-
-        query = f"""query {{
-            station(id: "{self._station_id}") {{
-                hafasID
-                longName
-                journeys(startTime: "{current_utc}", endTime: "{current_utc_offset_plus_1}", first:50) {{
-                    totalCount
-                    elements {{
-                        ... on Journey {{
-                            line {{
-                                lineGroup {{
-                                    label
-                                }}
-                            }}
-                            loads(onlyHafasID: "{self._station_id}") {{
-                                ratio
-                                loadType
-                            }}
-                            cancelled
-                            stops(onlyHafasID: "{self._station_id}") {{
-                                plannedDeparture {{
-                                    isoString
-                                }}
-                                realtimeDeparture {{
-                                    isoString
-                                }}
-                                destinationLabel
-                                pole {{
-                                    platform {{
-                                        label
-                                    }}
-                                }}
-                            }}
-                        }}
-                    }}
-                }}
-            }}
-        }}"""
-
-        self._query_result = await self._hass.async_add_executor_job(
-            self._cf.request_query_response, query, self._at_info
-        )
-        # Set _attr_state here to hold the full query result for other entities to access
-        self._attr_state = self._query_result
-
-    def _extract_departure(self, index):
+    def _extract_departure(self, index: int) -> str | None:
+        """Extract the ISO formatted departure time at the given index."""
         try:
-            elements = self._query_result["data"]["station"]["journeys"]["elements"]
+            elements = self.coordinator.data["data"]["station"]["journeys"]["elements"]
         except (KeyError, TypeError):
             return None
 
@@ -176,29 +79,29 @@ class RNVBaseSensor(Entity):
                 if self._line and line != self._line:
                     continue
 
-                realtime_str = stop.get("realtimeDeparture", {}).get("isoString")
-                planned_str = stop.get("plannedDeparture", {}).get("isoString")
-                if realtime_str:
-                    dep_str = realtime_str
-                else:
-                    dep_str = planned_str
-
+                dep_str = stop.get("realtimeDeparture", {}).get(
+                    "isoString"
+                ) or stop.get("plannedDeparture", {}).get("isoString")
                 if not dep_str:
                     continue
 
-                dep_time = datetime.fromisoformat(dep_str)
+                try:
+                    dep_time = datetime.fromisoformat(dep_str)
+                except ValueError:
+                    continue
+
                 if dep_time > now:
                     departures.append(dep_time)
 
         departures.sort()
         if index is not None and index < len(departures):
-            return departures[index]
+            return departures[index].isoformat()
         return None
 
-    def _extract_journey_info(self, index):
+    def _extract_journey_info(self, index: int) -> dict[str, Any] | None:
         """Extract journey info with only realtime and planned times at given index."""
         try:
-            elements = self._query_result["data"]["station"]["journeys"]["elements"]
+            elements = self.coordinator.data["data"]["station"]["journeys"]["elements"]
         except (KeyError, TypeError):
             return None
 
@@ -226,13 +129,9 @@ class RNVBaseSensor(Entity):
                 if self._line and line != self._line:
                     continue
 
-                realtime_str = stop.get("realtimeDeparture", {}).get("isoString")
-                planned_str = stop.get("plannedDeparture", {}).get("isoString")
-                if realtime_str:
-                    dep_str = realtime_str
-                else:
-                    dep_str = planned_str
-
+                dep_str = stop.get("realtimeDeparture", {}).get(
+                    "isoString"
+                ) or stop.get("plannedDeparture", {}).get("isoString")
                 if not dep_str:
                     continue
 
@@ -242,12 +141,17 @@ class RNVBaseSensor(Entity):
                     continue
 
                 if dep_time > now:
-                    load_type_raw = journey.get("loads", [{}])[0].get("loadType")
-                    load_ratio_raw = journey.get("loads", [{}])[0].get("ratio")
+                    loads = journey.get("loads", [{}])
+                    load_type_raw = loads[0].get("loadType")
+                    load_ratio_raw = loads[0].get("ratio")
 
                     journey_info = {
-                        "planned_time": planned_str,
-                        "realtime_time": realtime_str,
+                        "planned_time": stop.get("plannedDeparture", {}).get(
+                            "isoString"
+                        ),
+                        "realtime_time": stop.get("realtimeDeparture", {}).get(
+                            "isoString"
+                        ),
                         "label": journey.get("line", {})
                         .get("lineGroup", {})
                         .get("label"),
@@ -275,25 +179,22 @@ class RNVNextDepartureSensor(RNVBaseSensor):
     """
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name of the sensor."""
         return "Next Departure"
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """Return the unique ID for the next departure sensor."""
         return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_next"
 
     @property
-    def state(self):
+    def state(self) -> str | None:
         """Return the ISO formatted departure time for the next upcoming departure."""
-        departure = self._extract_departure(0)
-        if departure:
-            return departure.isoformat()
-        return None
+        return self._extract_departure(0)
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return extra state attributes for the next departure sensor."""
         journey_info = self._extract_journey_info(0)
         if journey_info:
@@ -308,25 +209,22 @@ class RNVNextNextDepartureSensor(RNVBaseSensor):
     """
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name of the sensor."""
         return "Second Departure"
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """Return the unique ID for the second departure sensor."""
         return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_second"
 
     @property
-    def state(self):
+    def state(self) -> str | None:
         """Return the ISO formatted departure time for the second upcoming departure."""
-        departure = self._extract_departure(1)
-        if departure:
-            return departure.isoformat()
-        return None
+        return self._extract_departure(1)
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return extra state attributes for the second departure sensor."""
         journey_info = self._extract_journey_info(1)
         if journey_info:
@@ -341,25 +239,22 @@ class RNVNextNextNextDepartureSensor(RNVBaseSensor):
     """
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name of the sensor."""
         return "Third Departure"
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """Return the unique ID for the third departure sensor."""
         return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_third"
 
     @property
-    def state(self):
+    def state(self) -> str | None:
         """Return the ISO formatted departure time for the third upcoming departure."""
-        departure = self._extract_departure(2)
-        if departure:
-            return departure.isoformat()
-        return None
+        return self._extract_departure(2)
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return extra state attributes for the third departure sensor."""
         journey_info = self._extract_journey_info(2)
         if journey_info:
@@ -394,12 +289,21 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         station_id = station["id"]
         platform = station.get("platform", "")
         line = station.get("line", "")
+
+        coordinator = RNVCoordinator(
+            hass,
+            options,
+            at_info,
+            station_id,
+            platform,
+            line,
+            entry,
+        )
+        await coordinator.async_config_entry_first_refresh()
+
         entities.append(
             RNVNextDepartureSensor(
-                options,
-                at_info,
-                tenantid,
-                hass,
+                coordinator,
                 station_id,
                 platform,
                 line,
@@ -408,10 +312,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         )
         entities.append(
             RNVNextNextDepartureSensor(
-                options,
-                at_info,
-                tenantid,
-                hass,
+                coordinator,
                 station_id,
                 platform,
                 line,
@@ -420,10 +321,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         )
         entities.append(
             RNVNextNextNextDepartureSensor(
-                options,
-                at_info,
-                tenantid,
-                hass,
+                coordinator,
                 station_id,
                 platform,
                 line,
