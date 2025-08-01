@@ -299,7 +299,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
             line,
             entry,
         )
-        await coordinator.async_config_entry_first_refresh()
+        await coordinator.async_refresh()
 
         entities.append(
             RNVNextDepartureSensor(
