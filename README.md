@@ -2,7 +2,7 @@
 [![Maintainer][maintainer-shield]][maintainer]
 [![HACS Custom][hacs-shield]][hacs-url]
 
-# HomeAssistant OpenData Rhein-Neckar-Verkehr (RNV) Integration
+# HomeAssistant Rhein-Neckar-Verkehr (RNV) Integration
 
 This custom integration adds support for real-time public transport departures from **Rhein-Neckar-Verkehr (RNV)** to Home Assistant, using the official [RNV OpenData GraphQL API](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/start).
 
@@ -42,7 +42,7 @@ Or follow these steps:
 
 ## Configuration
 
-After installation, add the integration to Home Assistant:
+After installation, add the integration to Home Assistant (Requesting the first access token may take a while):
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=rnv)
 
