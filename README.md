@@ -2,7 +2,7 @@
 [![Maintainer][maintainer-shield]][maintainer]
 [![HACS Custom][hacs-shield]][hacs-url]
 
-# HomeAssistant Rhein-Neckar-Verkehr (RNV) Integration
+# Home Assistant Rhein-Neckar-Verkehr (RNV) Integration
 
 This custom integration adds support for real-time public transport departures from **Rhein-Neckar-Verkehr (RNV)** to Home Assistant, using the official [RNV OpenData GraphQL API](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/start).
 
@@ -69,9 +69,9 @@ The station ID (hafasId) can be found in a json file [here](https://www.opendata
 
 | Field        | Type   | Description                                      | Required | Default |
 |--------------|--------|-------------------------------------------------|----------|---------|
-| `station_id` | string | The unique identifier of the station (e.g., station code). | Yes      | —       |
-| `platform`   | string | Optional platform number or name at the station. | No       | (empty) |
-| `line`       | string | Optional specific line to monitor at the station. | No       | (empty) |
+| `station_id` | string | The unique identifier of the station (hafasID from json file, e.g. "1144" for "Betriebshof"). | Yes      | —       |
+| `platform`   | string | Optional platform number (e.g. "A", "B", ...). | No       | (empty) |
+| `line`       | string | Optional specific line to monitor at the station (e.g. "33", "24", ...). | No       | (empty) |
 
 #### **Remove a station:**  
 Select a station from your saved list to remove it (this also deletes associated devices).
