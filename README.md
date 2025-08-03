@@ -2,6 +2,8 @@
 [![Maintainer][maintainer-shield]][maintainer]
 [![HACS Custom][hacs-shield]][hacs-url]
 
+<img src="images/icon@2x.png" alt="RNV Logo" width="150"/>
+
 # Home Assistant Rhein-Neckar-Verkehr (RNV) Integration
 
 This custom integration adds support for real-time public transport departures from **Rhein-Neckar-Verkehr (RNV)** to Home Assistant, using the official [RNV OpenData GraphQL API](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/start).
@@ -79,6 +81,11 @@ Select a station from your saved list to remove it (this also deletes associated
 #### **Save and exit:**  
 Apply your changes and close the options menu.
 
+## Examples
+Below are two examples showing upcoming RNV public transport departures in Home Assistant:
+
+<img src="images/sensor_1.png" alt="RNV Logo" width="200"/>
+<img src="images/sensor_2.png" alt="RNV Logo" width="200"/>
 
 ## License
 
