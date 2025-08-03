@@ -84,8 +84,8 @@ Apply your changes and close the options menu.
 ## Examples
 Below are two examples showing upcoming RNV public transport departures in Home Assistant:
 
-<img src="images/sensor_1.png" alt="RNV Logo" width="300"/>
-<img src="images/sensor_2.png" alt="RNV Logo" width="300"/>
+<img src="images/example_departures.png" alt="RNV Logo" width="300"/>
+<img src="images/example_betriebshof.png" alt="RNV Logo" width="300"/>
 
 ## License
 
