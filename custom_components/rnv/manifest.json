@@ -1,7 +1,7 @@
 {
   "domain": "rnv",
   "name": "Rhein-Neckar-Verkehr (RNV)",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "codeowners": [
     "@mirko-sommer"
   ],
