@@ -90,9 +90,9 @@ Below are two examples showing upcoming RNV public transport departures in Home 
 ## License
 
 This project is licensed under the [MIT License](./LICENSE),  
-based on code © 2024 Rhein-Neckar Verkehr GmbH.
+based on the official [RNV OpenData Python Client](https://github.com/Rhein-Neckar-Verkehr/data-hub-python-client).
 
-Based on the official [RNV OpenData Python Client](https://github.com/Rhein-Neckar-Verkehr/data-hub-python-client).
+> **Disclaimer:** This project is an independent community integration and is not affiliated with or endorsed by Rhein-Neckar-Verkehr GmbH (RNV).
 
 [releases-shield]: https://img.shields.io/github/release/mirko-sommer/homeassistant-rnv.svg?style=for-the-badge
 [releases]: https://github.com/mirko-sommer/homeassistant-rnv/releases
