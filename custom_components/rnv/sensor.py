@@ -281,7 +281,12 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         "CLIENT_SECRET": entry.data.get("clientsecret"),
         "RESOURCE_ID": entry.data.get("resource"),
     }
+    
+    # MIGRATION: If options are empty but stations exist in data, migrate them
+    if not entry.options.get("stations") and entry.data.get("stations"):
+        hass.config_entries.async_update_entry(entry, options={"stations": entry.data["stations"]})
 
+    # Always read stations from options
     station_data = entry.options.get("stations", [])
 
     entities = []
