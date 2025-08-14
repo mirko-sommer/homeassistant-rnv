@@ -304,7 +304,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
             line,
             entry,
         )
-        await coordinator.async_refresh()
+        # Do not await coordinator.async_refresh() here; let it fetch in the background
 
         entities.append(
             RNVNextDepartureSensor(
