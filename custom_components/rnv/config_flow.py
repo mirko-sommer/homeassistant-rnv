@@ -326,14 +326,25 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
         Returns:
             The result of the next step in the options flow.
         """
+        errors = {}
         if user_input is not None:
             new_station = {
                 "id": user_input["station_id"],
                 "platform": user_input.get("platform", ""),
                 "line": user_input.get("line", ""),
             }
-            self.stations.append(new_station)
-            return await self.async_step_menu()
+            # Prevent duplicates
+            for s in self.stations:
+                if (
+                    s["id"] == new_station["id"]
+                    and s.get("platform", "") == new_station["platform"]
+                    and s.get("line", "") == new_station["line"]
+                ):
+                    errors["base"] = "duplicate_station"
+                    break
+            if not errors:
+                self.stations.append(new_station)
+                return await self.async_step_menu()
 
         return self.async_show_form(
             step_id="add_station",
@@ -344,6 +355,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional("line", default=""): str,
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_remove_station(self, user_input=None):
