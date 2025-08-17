@@ -84,10 +84,10 @@ Apply your changes and close the options menu.
 ## Examples
 Below are two examples showing upcoming RNV public transport departures in Home Assistant:
 
-<img src="images/example_departures.png" alt="RNV Logo" width="300"/>
-<img src="images/example_betriebshof.png" alt="RNV Logo" width="300"/>
+<img src="images/example_departures.png" alt="RNV Logo" width="200"/>
+<img src="images/example_betriebshof.png" alt="RNV Logo" width="250"/>
 
-### Example Card
+## Example Frontend Card
 Using the markdown card in Home Assistant an overview like this can be generated:
 
 <img src="images/markdown.png" alt="RNV Logo" width="300"/>
