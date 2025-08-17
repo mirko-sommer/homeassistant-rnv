@@ -64,18 +64,21 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             .isoformat()
             .replace("+00:00", "Z")
         )
-        current_utc_offset_plus_1 = (
-            (datetime.now(UTC) + timedelta(hours=1))
-            .replace(second=0, microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z")
-        )
+
+        now_utc = datetime.now(UTC)
+        current_utc = now_utc.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
+        # If time is between 00:00 and 04:00, set end time to plus 5 hours, else plus 2 hours
+        if 0 <= now_utc.hour < 4:
+            end_time = now_utc + timedelta(hours=5)
+        else:
+            end_time = now_utc + timedelta(hours=2)
+        current_utc_offset = end_time.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
 
         query = f"""query {{
             station(id: "{self._station_id}") {{
                 hafasID
                 longName
-                journeys(startTime: "{current_utc}", endTime: "{current_utc_offset_plus_1}", first:50) {{
+                journeys(startTime: "{current_utc}", endTime: "{current_utc_offset}", first:50) {{
                     totalCount
                     elements {{
                         ... on Journey {{
