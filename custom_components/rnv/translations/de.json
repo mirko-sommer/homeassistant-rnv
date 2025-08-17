@@ -25,7 +25,7 @@
     "step": {
       "menu": {
         "title": "Stationen verwalten",
-        "description": "Wähle eine Aktion, um deine Haltestellen zu verwalten.",
+        "description": "Wähle eine Aktion, um deine Haltestellen zu verwalten: \n \n ➕ Haltestelle hinzufügen \n 🗑️ Haltestelle entfernen \n ✅ Speichern und beenden",
         "data": {
           "action": "Aktion"
         }

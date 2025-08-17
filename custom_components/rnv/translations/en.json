@@ -25,7 +25,7 @@
     "step": {
       "menu": {
         "title": "Manage Stations",
-        "description": "Choose an action to manage your stations.",
+        "description": "Choose an action to manage your stations: \n \n ➕ Add station \n 🗑️ Remove Station \n ✅ Save and exit",
         "data": {
           "action": "Action"
         }

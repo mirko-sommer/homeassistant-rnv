@@ -308,9 +308,9 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     vol.Required("action"): vol.In(
                         {
-                            "add": "➕ Add station",
-                            "remove": "🗑️ Remove station",
-                            "finish": "✅ Save and exit",
+                            "add": "➕",
+                            "remove": "🗑️",
+                            "finish": "✅",
                         }
                     )
                 }
@@ -371,9 +371,9 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_menu()
 
         stations_dict = {
-            str(
-                idx
-            ): f"{s['id']} (Platform: {s.get('platform', '')}, Line: {s.get('line', '')})"
+            str(idx): f"{s['id']} ({', '.join([v for v in (s.get('platform'), s.get('line')) if v])})"
+            if s.get("platform") or s.get("line")
+            else f"{s['id']}"
             for idx, s in enumerate(self.stations)
         }
 
