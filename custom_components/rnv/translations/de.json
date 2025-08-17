@@ -1,0 +1,54 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "RNV - Öffentlicher Verkehr",
+        "description": "Gib deine Tenant-ID, Client-ID, Client-Secret udn die Resource ein.\nFür die Nutzung dieser Integration benötigst du Zugangsdaten zur RNV Open Data API. Fordere Zugriff für 'GraphQL' hier an: [RNV API Zugriff anfragen](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api)",
+        "data": {
+          "tenantid": "Tenant ID",
+          "clientid": "Client ID",
+          "clientsecret": "Client Secret",
+          "resource": "Resource"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  },
+  "options": {
+    "step": {
+      "menu": {
+        "title": "Stationen verwalten",
+        "description": "Wähle eine Aktion, um deine Haltestellen zu verwalten.",
+        "data": {
+          "action": "Aktion"
+        }
+      },
+      "add_station": {
+        "title": "Haltestelle hinzufügen",
+        "description": "Gib die Details der hinzuzufügenden Haltestelle an.\nDie Haltestellen-ID (hafasId) findest du in einer json-Datei [hier](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/datensaetze?id=1405&tx_vrrkit_view[dataset_name]=haltestellendaten-rnv&tx_vrrkit_view[action]=details&tx_vrrkit_view[controller]=View).",
+        "data": {
+          "station_id": "Haltestellen-ID (hafasId)",
+          "platform": "Steig (optional)",
+          "line": "Linie (optional)"
+        }
+      },
+      "remove_station": {
+        "title": "Haltestelle entfernen",
+        "description": "Wähle die Haltestelle aus, die entfernt werden soll.",
+        "data": {
+          "station_to_remove": "Zu entfernende Haltestelle"
+        }
+      }
+    },
+    "error": {
+      "duplicate_station": "Diese Haltestelle-Steig-Linien Kombination ist bereits konfiguriert."
+    }
+  }
+}
