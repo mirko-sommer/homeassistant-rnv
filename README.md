@@ -87,6 +87,105 @@ Below are two examples showing upcoming RNV public transport departures in Home 
 <img src="images/example_departures.png" alt="RNV Logo" width="300"/>
 <img src="images/example_betriebshof.png" alt="RNV Logo" width="300"/>
 
+### Example Card
+Using the markdown card in Home Assistant an overview like this can be generated:
+
+<img src="images/markdown.png" alt="RNV Logo" width="300"/>
+
+Use this code to replicate the card in Home Assistant. You only have to change the heading and your RNV sensor names:
+```
+type: markdown
+content: |
+  <h3 style="font-size: 32px; color: white;">🚏 Betriebshof</h3>
+
+  {% set sensors = [
+    'sensor.rnv_station_1144_next_departure',
+    'sensor.rnv_station_1144_second_departure',
+    'sensor.rnv_station_1144_third_departure'
+  ] %}
+
+  <table border="1" width="100%" cellspacing="0" cellpadding="4">
+    <tr>
+      <th align="center">Line</th>
+      <th align="center">Destination</th>
+      <th align="center">Departure</th>
+      <th align="center">Platform</th>
+      <th align="center">Load</th>
+    </tr>
+    {%- for s in sensors %}
+      {%- set state = states[s] %}
+      {%- if state and state.attributes.planned_time %}
+        {%- set planned = as_timestamp(state.attributes.planned_time) %}
+        {%- set realtime = as_timestamp(state.attributes.realtime_time) if state.attributes.realtime_time else planned %}
+        {%- set departure = realtime if realtime != planned else planned %}
+        {%- set minutes = ((departure - now().timestamp()) / 60) | round(0) %}
+        {%- set is_rt = (realtime != planned) %}
+        <tr>
+          <td align="center">{{ state.attributes.label or '-' }}</td>
+          <td align="center">{{ state.attributes.destination or '-' }}</td>
+          <td align="center">
+            {%- if is_rt %}⏱&nbsp;{%- endif %}
+            {%- if minutes <= 0 -%} jetzt {%- else -%} {{ minutes }} min {%- endif -%}
+          </td>
+          <td align="center">{{ state.attributes.platform or '-' }}</td>
+          <td align="center">{{ state.attributes.load_ratio or '-' }}</td>
+        </tr>
+      {%- endif %}
+    {%- endfor %}
+  </table>
+```
+
+For a German Version:
+
+<img src="images/markdown_german.png" alt="RNV Logo" width="300"/>
+
+```
+type: markdown
+content: |
+  <h3 style="font-size: 32px; color: white;">🚏 Betriebshof</h1>
+
+  {% set sensors = [
+    'sensor.rnv_station_1144_next_departure',
+    'sensor.rnv_station_1144_second_departure',
+    'sensor.rnv_station_1144_third_departure'
+  ] %}
+
+  <table border="1" width="100%" cellspacing="0" cellpadding="4">
+    <tr>
+      <th align="center">Linie</th>
+      <th align="center">Ziel</th>
+      <th align="center">Abfahrt</th>
+      <th align="center">Steig</th>
+      <th align="center">Belegt</th>
+    </tr>
+    {%- for s in sensors %}
+      {%- set state = states[s] %}
+      {%- if state %}
+        {%- set planned = as_timestamp(state.attributes.planned_time) %}
+        {%- set realtime = as_timestamp(state.attributes.realtime_time) %}
+        {%- set departure = realtime if realtime != planned else planned %}
+        {%- set minutes = ((departure - now().timestamp()) / 60) | round(0) %}
+        {%- set is_rt = (realtime != planned) %}
+        <tr>
+          <td align="center">{{ state.attributes.label }}</td>
+          <td align="center">{{ state.attributes.destination }}</td>
+          <td align="center">
+            {%- if is_rt %}⏱&nbsp;{%- endif %}
+            {%- if minutes <= 0 -%}
+              now
+            {%- else -%}
+              {{ minutes }} min
+            {%- endif -%}
+          </td>
+          <td align="center">{{ state.attributes.platform or '-' }}</td>
+          <td align="center">{{ state.attributes.load_ratio or '-' }}</td>
+        </tr>
+      {%- endif %}
+    {%- endfor %}
+  </table>
+
+```
+
 ## License
 
 This project is licensed under the [MIT License](./LICENSE),  
