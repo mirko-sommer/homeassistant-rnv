@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "RNV - Öffentlicher Verkehr",
-        "description": "Gib deine Tenant-ID, Client-ID, Client-Secret udn die Resource ein.\nFür die Nutzung dieser Integration benötigst du Zugangsdaten zur RNV Open Data API. Fordere Zugriff für 'GraphQL' hier an: [RNV API Zugriff anfragen](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api)",
+        "description": "Gib deine Tenant-ID, Client-ID, Client-Secret und die Resource ein.\nFür die Nutzung dieser Integration benötigst du Zugangsdaten zur RNV Open Data API. Fordere Zugriff für 'GraphQL' hier an: [RNV API Zugriff anfragen](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api)",
         "data": {
           "tenantid": "Tenant ID",
           "clientid": "Client ID",
