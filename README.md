@@ -4,7 +4,11 @@
 
 <img src="images/icon@2x.png" alt="RNV Logo" width="150"/>
 
+
+
 # Home Assistant Rhein-Neckar-Verkehr (RNV) Integration
+
+> 🌟 This project was featured in the [official RNV Open Data Showroom (German only)](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/showroom?tx_news_pi1%5Baction%5D=detail&tx_news_pi1%5Bcontroller%5D=News&tx_news_pi1%5Bnews%5D=263&cHash=1e606984b7e9cb70c1d085f53b2b11f4).
 
 This custom integration adds support for real-time public transport departures from **Rhein-Neckar-Verkehr (RNV)** to Home Assistant, using the official [RNV OpenData GraphQL API](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/start).
 
@@ -16,7 +20,7 @@ Each configured station is represented as a device with separate entities for th
 
 To use this integration, you need access credentials for the RNV Open Data API.  
 You can request access via the official platform here, we need the credentials for "GraphQL":  
-👉 [RNV API Access Request](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api)
+[RNV API Access Request](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api)
 
 > Note: Approval may take a few days. Make sure to include a brief description of your use case (e.g., "For a Home Assistant integration to display upcoming public transport departures.").
 
