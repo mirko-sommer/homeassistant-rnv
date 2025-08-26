@@ -13,6 +13,7 @@ This custom integration adds support for real-time public transport departures f
 It allows you to monitor upcoming departures for RNV stations, with optional filtering by **platform** and **line**.  
 Each configured station is represented as a device with separate entities for the **next three departures**.
 
+If you find this integration useful, I’d really appreciate a ⭐️. It helps others discover it!
 
 ## Obtain API Credentials
 
