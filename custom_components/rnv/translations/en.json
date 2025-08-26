@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "RNV Public Transport",
-        "description": "Enter your tenant ID, client ID, client secret and resource.\n To use this integration, you need access credentials for the RNV Open Data API.\n Request acess for 'GraphQL' here:  [RNV API Access Request](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api) ",
+        "description": "Enter your tenant ID, client ID, client secret and resource.\nTo use this integration, you need access credentials for the RNV Open Data API.\nRequest acess for 'GraphQL' here:  [RNV API Access Request](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api)",
         "data": {
           "tenantid": "Tenant ID",
           "clientid": "Client ID",
@@ -25,14 +25,14 @@
     "step": {
       "menu": {
         "title": "Manage Stations",
-        "description": "Choose an action to manage your stations: \n \n ➕ Add station \n 🗑️ Remove Station \n ✅ Save and exit",
+        "description": "Choose an action to manage your stations:\n\n➕ Add station\n🗑️ Remove Station\n✅ Save and exit",
         "data": {
           "action": "Action"
         }
       },
       "add_station": {
         "title": "Add a Station",
-        "description": "Provide the details of the station you want to add.\n The station ID (hafasId) can be found in a json file [here](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/datensaetze?id=1405&tx_vrrkit_view[dataset_name]=haltestellendaten-rnv&tx_vrrkit_view[action]=details&tx_vrrkit_view[controller]=View).",
+        "description": "Provide the details of the station you want to add.\nThe station ID (hafasId) can be found in a json file [here](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/datensaetze?id=1405&tx_vrrkit_view[dataset_name]=haltestellendaten-rnv&tx_vrrkit_view[action]=details&tx_vrrkit_view[controller]=View).",
         "data": {
           "station_id": "Station ID (hafasId)",
           "platform": "Platform (optional)",
