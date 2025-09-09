@@ -8,7 +8,7 @@
 
 # Home Assistant Rhein-Neckar-Verkehr (RNV) Integration
 
-This custom integration adds support for real-time public transport departures from **Rhein-Neckar-Verkehr (RNV)** to Home Assistant, using the official [RNV OpenData GraphQL API](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/start).
+This custom hacs-default integration adds support for real-time public transport departures from **Rhein-Neckar-Verkehr (RNV)** to Home Assistant, using the official [RNV OpenData GraphQL API](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/start).
 
 It allows you to monitor upcoming departures for RNV stations, with optional filtering by **platform** and **line**.  
 Each configured station is represented as a device with separate entities for the **next three departures**.
@@ -36,14 +36,12 @@ You will need to enter all of these values during setup of the integration in Ho
 ## Installation
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mirko-sommer&repository=homeassistant-rnv&category=integration)
 
-Or follow these steps:
+This integration is now available as a **default HACS repository**!
 
 1. Install [HACS](https://hacs.xyz/) if you haven't already.
-2. In HACS, go to **Integrations → ⋮ → Custom repositories**.
-3. Add this repository as a [custom integration repository](https://hacs.xyz/docs/faq/custom_repositories):  
-    - [https://github.com/mirko-sommer/homeassistant-rnv](https://github.com/mirko-sommer/homeassistant-rnv)
-    - Set the category to `Integration`.
-4. Restart Home Assistant.
+2. In HACS, go to **Integrations**.
+3. Search for **RNV** and install the integration directly from the default list.
+4. Restart Home Assistant if prompted.
 
 ## Configuration
 
@@ -202,5 +200,5 @@ based on the official [RNV OpenData Python Client](https://github.com/Rhein-Neck
 [maintainer-shield]: https://img.shields.io/badge/maintainer-mirko--sommer-blue.svg?style=for-the-badge
 [maintainer]: https://github.com/mirko-sommer
 
-[hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
+[hacs-shield]: https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge
 [hacs-url]: https://github.com/mirko-sommer/homeassistant-rnv
