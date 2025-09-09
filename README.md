@@ -1,6 +1,7 @@
 [![GitHub Release][releases-shield]][releases]
 [![Maintainer][maintainer-shield]][maintainer]
 [![HACS Custom][hacs-shield]][hacs-url]
+[![GitHub Downloads][downloads]][downloads]
 
 <img src="images/icon@2x.png" alt="RNV Logo" width="150"/>
 
@@ -202,3 +203,6 @@ based on the official [RNV OpenData Python Client](https://github.com/Rhein-Neck
 
 [hacs-shield]: https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge
 [hacs-url]: https://github.com/mirko-sommer/homeassistant-rnv
+
+[downloads]: https://img.shields.io/github/downloads/mirko-sommer/homeassistant-rnv/total?style=for-the-badge
+
