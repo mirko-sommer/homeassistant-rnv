@@ -22,7 +22,7 @@ To use this integration, you need access credentials for the RNV Open Data API.
 You can request access via the official platform here, we need the credentials for "GraphQL":  
 [RNV API Access Request](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api)
 
-> Note: Approval may take a few days. Make sure to include a brief description of your use case (e.g., "For a Home Assistant integration to display upcoming public transport departures.").
+> Note: Approval may take a few days. Make sure to include a brief description of your use case (e.g., "For a Home Assistant integration to display upcoming public transport departures."). If you do not receive feedback within a few days, sending an email to [opendata@rnv-online.de](mailto:opendata@rnv-online.de) may help expedite the process.
 
 Once approved, you will receive the following credentials:
 
