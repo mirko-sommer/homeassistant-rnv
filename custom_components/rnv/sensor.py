@@ -4,13 +4,13 @@ This module defines Home Assistant sensor entities for tracking public transport
 from RNV stations, including next, second, and third departures, with platform and line filtering.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CLIENT_API_URL, OAUTH_URL_TEMPLATE
@@ -18,13 +18,31 @@ from .coordinator import RNVCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Time window for valid departures (in minutes)
+RNV_DEPARTURE_VALID_MINUTES = 5
 
-class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], Entity):
-    """Base sensor for RNV departures.
 
-    Handles fetching and parsing departure data for a specific station, platform, and line.
-    Provides common attributes and methods for derived departure sensors.
+class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
+    """Base sensor entity for RNV departures.
+
+    Provides common logic for extracting and restoring departure times and attributes
+    for a specific station, platform, and line, supporting fallback to cached or restored state.
     """
+
+    @property
+    def available(self) -> bool:
+        """Return True if the entity has a valid, cached, or recent restored state; False otherwise."""
+        # Only available if the current, cached, or restored state is present and less than RNV_DEPARTURE_VALID_MINUTES in the past
+        state = self._current_state_for_index(self._departure_index)
+        if state is None:
+            return False
+        try:
+            dt = datetime.fromisoformat(state)
+        except ValueError:
+            return False
+        now = datetime.now(UTC)
+        earliest_allowed = now - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
+        return dt >= earliest_allowed
 
     _attr_has_entity_name = True
     _attr_device_class = "timestamp"
@@ -44,6 +62,64 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], Entity):
         self._platform = platform or ""
         self._line = line or ""
         self._departure_index = departure_index
+        # restored state/attributes populated in async_added_to_hass
+        self._restored_state: str | None = None
+        self._restored_attributes: dict[str, Any] | None = None
+        # cache last valid state/attributes for error fallback
+        self._last_valid_state: str | None = None
+        self._last_valid_attributes: dict[str, Any] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore last known state when Home Assistant starts.
+
+        This allows the entity to keep its state across restarts until the
+        coordinator fetches fresh data.
+        """
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None:
+            # store raw state string and attributes for fallback
+            self._restored_state = last_state.state
+            # copy attributes to avoid accidental mutation
+            self._restored_attributes = (
+                dict(last_state.attributes) if last_state.attributes else None
+            )
+
+    def _current_state_for_index(self, index: int) -> str | None:
+        """Return the current state for an index, fallback to last valid or restored state if missing.
+
+        Only restore state if it is less than RNV_DEPARTURE_VALID_MINUTES minutes in the past.
+        """
+        val = self._extract_departure(index)
+        if val is not None:
+            # update last valid state
+            self._last_valid_state = val
+            return val
+        # If coordinator data is missing (error), use last valid state
+        if self._last_valid_state is not None:
+            return self._last_valid_state
+        # Check restored state age (ISO8601 string) on startup
+        if self._restored_state:
+            try:
+                restored_dt = datetime.fromisoformat(self._restored_state)
+            except ValueError:
+                return None
+            now = datetime.now(UTC)
+            earliest_allowed = now - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
+            if restored_dt >= earliest_allowed:
+                return self._restored_state
+        return None
+
+    def _current_attrs_for_index(self, index: int) -> dict[str, Any] | None:
+        """Return current extra attributes for an index, fallback to last valid or restored attributes if missing."""
+        attrs = self._extract_journey_info(index)
+        if attrs:
+            # update last valid attributes
+            self._last_valid_attributes = attrs.copy()
+            return self._last_valid_attributes
+        if self._last_valid_attributes is not None:
+            return self._last_valid_attributes
+        return self._restored_attributes
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -63,6 +139,10 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], Entity):
             return None
 
         now = datetime.now(UTC)
+        # allow departures up to RNV_DEPARTURE_VALID_MINUTES minutes in the past to account for
+        # small clock skews or delays; anything older should be treated
+        # as past and not considered an upcoming departure
+        earliest_allowed = now - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
         departures = []
 
         for journey in elements:
@@ -90,7 +170,9 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], Entity):
                 except ValueError:
                     continue
 
-                if dep_time > now:
+                # include departures that are in the future or within the
+                # allowed past window; skip otherwise
+                if dep_time >= earliest_allowed:
                     departures.append(dep_time)
 
         departures.sort()
@@ -111,8 +193,8 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], Entity):
             "II": "II - light - mittel-voll",
             "III": "III - full - voll",
         }
-
         now = datetime.now(UTC)
+        earliest_allowed = now - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
         journeys_info = []
 
         for journey in elements:
@@ -140,7 +222,9 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], Entity):
                 except ValueError:
                     continue
 
-                if dep_time > now:
+                # include departures that are in the future or within the
+                # allowed past window; skip otherwise
+                if dep_time >= earliest_allowed:
                     loads = journey.get("loads", [{}])
                     load_type_raw = loads[0].get("loadType")
                     load_ratio_raw = loads[0].get("ratio")
@@ -191,15 +275,12 @@ class RNVNextDepartureSensor(RNVBaseSensor):
     @property
     def state(self) -> str | None:
         """Return the ISO formatted departure time for the next upcoming departure."""
-        return self._extract_departure(0)
+        return self._current_state_for_index(0)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return extra state attributes for the next departure sensor."""
-        journey_info = self._extract_journey_info(0)
-        if journey_info:
-            return journey_info.copy()
-        return None
+        return self._current_attrs_for_index(0)
 
 
 class RNVNextNextDepartureSensor(RNVBaseSensor):
@@ -221,15 +302,12 @@ class RNVNextNextDepartureSensor(RNVBaseSensor):
     @property
     def state(self) -> str | None:
         """Return the ISO formatted departure time for the second upcoming departure."""
-        return self._extract_departure(1)
+        return self._current_state_for_index(1)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return extra state attributes for the second departure sensor."""
-        journey_info = self._extract_journey_info(1)
-        if journey_info:
-            return journey_info.copy()
-        return None
+        return self._current_attrs_for_index(1)
 
 
 class RNVNextNextNextDepartureSensor(RNVBaseSensor):
@@ -251,15 +329,12 @@ class RNVNextNextNextDepartureSensor(RNVBaseSensor):
     @property
     def state(self) -> str | None:
         """Return the ISO formatted departure time for the third upcoming departure."""
-        return self._extract_departure(2)
+        return self._current_state_for_index(2)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return extra state attributes for the third departure sensor."""
-        journey_info = self._extract_journey_info(2)
-        if journey_info:
-            return journey_info.copy()
-        return None
+        return self._current_attrs_for_index(2)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
@@ -281,10 +356,12 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         "CLIENT_SECRET": entry.data.get("clientsecret"),
         "RESOURCE_ID": entry.data.get("resource"),
     }
-    
+
     # MIGRATION: If options are empty but stations exist in data, migrate them
     if not entry.options.get("stations") and entry.data.get("stations"):
-        hass.config_entries.async_update_entry(entry, options={"stations": entry.data["stations"]})
+        hass.config_entries.async_update_entry(
+            entry, options={"stations": entry.data["stations"]}
+        )
 
     # Always read stations from options
     station_data = entry.options.get("stations", [])

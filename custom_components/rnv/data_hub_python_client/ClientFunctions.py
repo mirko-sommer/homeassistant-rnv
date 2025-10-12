@@ -43,14 +43,16 @@ class ClientFunctions:
 
         except SSLError as e:
             _LOGGER.error("SSL error while requesting access token: %s", e)
+            raise
         except Timeout:
             _LOGGER.error("Request timed out while requesting access token")
+            raise
         except RequestException as e:
             _LOGGER.error("HTTP error while requesting access token: %s", e)
+            raise
         except Exception:
             _LOGGER.exception("Unexpected error requesting access token")
-
-        return None
+            raise
 
     def request_query_response(self, query: str, at_response: dict) -> dict | None:
         """Do GraphQL query in a POST request and obtain the response from Data Hub API.
@@ -78,11 +80,13 @@ class ClientFunctions:
 
         except SSLError as e:
             _LOGGER.error("SSL error during GraphQL query: %s", e)
+            raise
         except Timeout:
             _LOGGER.error("Request timed out during GraphQL query")
+            raise
         except RequestException as e:
             _LOGGER.error("HTTP error during GraphQL query: %s", e)
+            raise
         except Exception:
             _LOGGER.exception("Unexpected error during GraphQL query")
-
-        return None
+            raise

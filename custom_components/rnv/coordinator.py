@@ -50,9 +50,17 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         expires_on = int(self._at_info.get("expires_on", 0))
         now_ts = int(time.time())
         if now_ts >= expires_on:
-            new_at_info = await self.hass.async_add_executor_job(
-                self._client.request_access_token
-            )
+            try:
+                new_at_info = await self.hass.async_add_executor_job(
+                    self._client.request_access_token
+                )
+            except Exception as err:
+                # Treat token retrieval errors as transient update failures
+                # so the sensor preserves its previous state
+                raise UpdateFailed(
+                    f"Error requesting access token for RNV API: {err}"
+                ) from err
+
             if new_at_info and "access_token" in new_at_info:
                 self._at_info = new_at_info
             else:
@@ -66,13 +74,17 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         now_utc = datetime.now(UTC)
-        current_utc = now_utc.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
+        current_utc = (
+            now_utc.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
+        )
         # If time is between 00:00 and 04:00, set end time to plus 5 hours, else plus 2 hours
         if 0 <= now_utc.hour < 4:
             end_time = now_utc + timedelta(hours=5)
         else:
             end_time = now_utc + timedelta(hours=2)
-        current_utc_offset = end_time.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
+        current_utc_offset = (
+            end_time.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
+        )
 
         query = f"""query {{
             station(id: "{self._station_id}") {{
@@ -117,6 +129,13 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._client.request_query_response, query, self._at_info
             )
         except Exception as err:
+            # If the underlying client raised, surface as UpdateFailed so
+            # the entity keeps its previous state instead of becoming unknown.
             raise UpdateFailed(f"Error fetching RNV data: {err}") from err
-        else:
-            return data
+
+        # If client returned None (it logged the error), treat as transient
+        # update failure so existing state is preserved.
+        if data is None:
+            raise UpdateFailed("No data returned from RNV API (transient error)")
+
+        return data
