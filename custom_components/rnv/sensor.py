@@ -149,7 +149,17 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
             if journey.get("cancelled"):
                 continue
 
-            for stop in journey.get("stops", []):
+            # Filter out invalid stops (e.g., destination label contains "$")
+            stops = journey.get("stops", [])
+            filtered_stops = [
+                s for s in stops if "$" not in s.get("destinationLabel", "")
+            ]
+            if filtered_stops is not stops:
+                # Persist the filtered list back into the cached coordinator data
+                # so other sensors won't see invalid entries either
+                journey["stops"] = filtered_stops
+
+            for stop in filtered_stops:
                 platform_label = stop.get("pole", {}).get("platform", {}).get("label")
                 line = journey.get("line", {}).get("lineGroup", {}).get("label")
 
@@ -201,7 +211,16 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
             if journey.get("cancelled"):
                 continue
 
-            for stop in journey.get("stops", []):
+            # Filter out invalid stops (e.g., destination label contains "$")
+            stops = journey.get("stops", [])
+            filtered_stops = [
+                s for s in stops if "$" not in s.get("destinationLabel", "")
+            ]
+            if filtered_stops is not stops:
+                # Persist the filtered list back into the cached coordinator data
+                journey["stops"] = filtered_stops
+
+            for stop in filtered_stops:
                 platform_label = stop.get("pole", {}).get("platform", {}).get("label")
                 line = journey.get("line", {}).get("lineGroup", {}).get("label")
 
