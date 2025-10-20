@@ -98,12 +98,12 @@ Use this code to replicate the card in Home Assistant. You only have to change t
 ```
 type: markdown
 content: |
-  <h3 style="font-size: 32px; color: white;">🚏 Betriebshof</h3>
+  <h3>🚏 Haltestelle</h1>
 
   {% set sensors = [
-    'sensor.rnv_station_1144_next_departure',
-    'sensor.rnv_station_1144_second_departure',
-    'sensor.rnv_station_1144_third_departure'
+    'sensor.rnv_station_XXXX_next_departure',
+    'sensor.rnv_station_XXXX_second_departure',
+    'sensor.rnv_station_XXXX_third_departure'
   ] %}
 
   <table border="1" width="100%" cellspacing="0" cellpadding="4">
@@ -116,18 +116,32 @@ content: |
     </tr>
     {%- for s in sensors %}
       {%- set state = states[s] %}
-      {%- if state and state.attributes.planned_time %}
+      {%- if state %}
         {%- set planned = as_timestamp(state.attributes.planned_time) %}
-        {%- set realtime = as_timestamp(state.attributes.realtime_time) if state.attributes.realtime_time else planned %}
+        {%- if states('state.attributes.realtime_time') not in ['none', 'unknown', 'unavailable', ''] %}
+        {%- set realtime = as_timestamp(state.attributes.realtime_time) %}
+        {%- else %}
+        {%- set realtime = as_timestamp(state.attributes.planned_time) %}
+        {%- endif %}
         {%- set departure = realtime if realtime != planned else planned %}
         {%- set minutes = ((departure - now().timestamp()) / 60) | round(0) %}
         {%- set is_rt = (realtime != planned) %}
         <tr>
-          <td align="center">{{ state.attributes.label or '-' }}</td>
-          <td align="center">{{ state.attributes.destination or '-' }}</td>
+          <td align="center">{{ state.attributes.label }}</td>
+          <td align="center">{{ state.attributes.destination }}</td>
           <td align="center">
+            {%- if state.attributes.cancelled -%}
+            <s>cancelled</s>
+            {%- else -%}
+
             {%- if is_rt %}⏱&nbsp;{%- endif %}
-            {%- if minutes <= 0 -%} jetzt {%- else -%} {{ minutes }} min {%- endif -%}
+            {%- if minutes <= 0 -%}
+            now
+            {%- else -%}
+              {{ minutes }} min
+            {%- endif -%}
+            {%- endif -%}
+
           </td>
           <td align="center">{{ state.attributes.platform or '-' }}</td>
           <td align="center">{{ state.attributes.load_ratio or '-' }}</td>
@@ -144,12 +158,12 @@ For a German Version:
 ```
 type: markdown
 content: |
-  <h3 style="font-size: 32px; color: white;">🚏 Betriebshof</h1>
+  <h3>🚏 Haltestelle</h1>
 
   {% set sensors = [
-    'sensor.rnv_station_1144_next_departure',
-    'sensor.rnv_station_1144_second_departure',
-    'sensor.rnv_station_1144_third_departure'
+    'sensor.rnv_station_XXXX_next_departure',
+    'sensor.rnv_station_XXXX_second_departure',
+    'sensor.rnv_station_XXXX_third_departure'
   ] %}
 
   <table border="1" width="100%" cellspacing="0" cellpadding="4">
@@ -164,7 +178,11 @@ content: |
       {%- set state = states[s] %}
       {%- if state %}
         {%- set planned = as_timestamp(state.attributes.planned_time) %}
+        {%- if states('state.attributes.realtime_time') not in ['none', 'unknown', 'unavailable', ''] %}
         {%- set realtime = as_timestamp(state.attributes.realtime_time) %}
+        {%- else %}
+        {%- set realtime = as_timestamp(state.attributes.planned_time) %}
+        {%- endif %}
         {%- set departure = realtime if realtime != planned else planned %}
         {%- set minutes = ((departure - now().timestamp()) / 60) | round(0) %}
         {%- set is_rt = (realtime != planned) %}
@@ -172,12 +190,18 @@ content: |
           <td align="center">{{ state.attributes.label }}</td>
           <td align="center">{{ state.attributes.destination }}</td>
           <td align="center">
+            {%- if state.attributes.cancelled -%}
+            <s>entfällt</s>
+            {%- else -%}
+
             {%- if is_rt %}⏱&nbsp;{%- endif %}
             {%- if minutes <= 0 -%}
-              now
+            sofort
             {%- else -%}
               {{ minutes }} min
             {%- endif -%}
+            {%- endif -%}
+
           </td>
           <td align="center">{{ state.attributes.platform or '-' }}</td>
           <td align="center">{{ state.attributes.load_ratio or '-' }}</td>
