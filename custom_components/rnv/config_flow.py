@@ -28,6 +28,30 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
+prefixes_by_field: dict[str, tuple[str, ...]] = {
+    "tenantid": ("tenantID=",),
+    "clientid": ("clientID=",),
+    "clientsecret": ("clientSecret=",),
+    "resource": ("resource=",),
+}
+
+
+class InvalidCredentialFormat(HomeAssistantError):
+    """Error raised when a credential contains unexpected formatting."""
+
+
+def sanitize_credential(field: str, value: str) -> str:
+    """Ensure credentials do not contain whitespace noise or known prefixes."""
+    cleaned = value.strip()
+    if not cleaned or cleaned != value:
+        raise InvalidCredentialFormat
+
+    for prefix in prefixes_by_field.get(field, ()):
+        if cleaned.lower().startswith(prefix.lower()):
+            raise InvalidCredentialFormat
+
+    return cleaned
+
 
 class RnvHub:
     """Placeholder for OAuth2 Authentication."""
@@ -135,8 +159,16 @@ class RnvHub:
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            sanitized: dict[str, Any] = {}
+            for key, raw_value in user_input.items():
+                try:
+                    sanitized[key] = sanitize_credential(key, raw_value)
+                except InvalidCredentialFormat:
+                    errors[key] = "invalid_format"
+
             try:
-                info = await validate_input(self.hass, user_input)
+                if not errors:
+                    info = await validate_input(self.hass, sanitized)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -148,7 +180,7 @@ class RnvHub:
                 if hasattr(self, "_reauth_entry"):
                     self.hass.config_entries.async_update_entry(
                         self._reauth_entry,
-                        data=user_input | {"at_info": info["at_info"]},
+                        data=sanitized | {"at_info": info["at_info"]},
                     )
                     await self.hass.config_entries.async_reload(
                         self._reauth_entry.entry_id
@@ -156,7 +188,7 @@ class RnvHub:
                     return self.async_abort(reason="reauth_successful")
 
                 return self.async_create_entry(
-                    title=info["title"], data=user_input | {"at_info": info["at_info"]}
+                    title=info["title"], data=sanitized | {"at_info": info["at_info"]}
                 )
 
         return self.async_show_form(
