@@ -28,15 +28,18 @@ class ClientFunctions:
         if not self.opts.get("OAUTH_URL"):
             raise ValueError("OAUTH_URL is missing from opts or is None.")
 
-        rq_body = (
-            f"grant_type=client_credentials&client_id={self.opts['CLIENT_ID']}"
-            f"&client_secret={self.opts['CLIENT_SECRET']}&resource={self.opts['RESOURCE_ID']}"
-        )
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        payload = {
+            "grant_type": "client_credentials",
+            "client_id": self.opts["CLIENT_ID"],
+            "client_secret": self.opts["CLIENT_SECRET"],
+            "resource": self.opts["RESOURCE_ID"],
+        }
 
         try:
             response = requests.post(
-                self.opts["OAUTH_URL"], headers=headers, data=rq_body, timeout=10
+                self.opts["OAUTH_URL"],
+                data=payload,
+                timeout=10,
             )
             response.raise_for_status()
             return response.json()
@@ -48,7 +51,11 @@ class ClientFunctions:
             _LOGGER.error("Request timed out while requesting access token")
             raise
         except RequestException as e:
-            _LOGGER.error("HTTP error while requesting access token: %s", e)
+            _LOGGER.error(
+                "HTTP error while requesting access token: %s — %s",
+                e,
+                getattr(e.response, "text", "<no body>"),
+            )
             raise
         except Exception:
             _LOGGER.exception("Unexpected error requesting access token")
@@ -85,7 +92,11 @@ class ClientFunctions:
             _LOGGER.error("Request timed out during GraphQL query")
             raise
         except RequestException as e:
-            _LOGGER.error("HTTP error during GraphQL query: %s", e)
+            _LOGGER.error(
+                "HTTP error during GraphQL query: %s — %s",
+                e,
+                getattr(e.response, "text", "<no body>"),
+            )
             raise
         except Exception:
             _LOGGER.exception("Unexpected error during GraphQL query")
