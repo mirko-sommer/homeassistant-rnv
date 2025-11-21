@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import CLIENT_API_URL, OAUTH_URL_TEMPLATE
 from .coordinator import RNVCoordinator
@@ -138,17 +139,16 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         except (KeyError, TypeError):
             return None
 
-        now = datetime.now(UTC)
+        now_utc = datetime.now(UTC)
         # allow departures up to RNV_DEPARTURE_VALID_MINUTES minutes in the past to account for
         # small clock skews or delays; anything older should be treated
         # as past and not considered an upcoming departure
-        earliest_allowed = now - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
+        earliest_allowed = now_utc - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
         departures = []
 
-        for journey in elements:
-            if journey.get("cancelled"):
-                continue
+        language = (self.hass.config.language or "en").lower()
 
+        for journey in elements:
             # Filter out invalid stops (e.g., destination label contains "$")
             stops = journey.get("stops", [])
             filtered_stops = [
@@ -181,8 +181,8 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                     continue
 
                 # include departures that are in the future or within the
-                # allowed past window; skip otherwise
-                if dep_time >= earliest_allowed:
+                # allowed past window; always include cancelled services
+                if dep_time >= earliest_allowed or journey.get("cancelled", False):
                     departures.append(dep_time)
 
         departures.sort()
@@ -203,14 +203,12 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
             "II": "II - light - mittel-voll",
             "III": "III - full - voll",
         }
-        now = datetime.now(UTC)
-        earliest_allowed = now - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
+        now_utc = datetime.now(UTC)
+        earliest_allowed = now_utc - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
         journeys_info = []
+        language = (self.hass.config.language or "en").lower()
 
         for journey in elements:
-            if journey.get("cancelled"):
-                continue
-
             # Filter out invalid stops (e.g., destination label contains "$")
             stops = journey.get("stops", [])
             filtered_stops = [
@@ -241,12 +239,31 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                 except ValueError:
                     continue
 
+                cancelled = journey.get("cancelled", False)
+
                 # include departures that are in the future or within the
-                # allowed past window; skip otherwise
-                if dep_time >= earliest_allowed:
+                # allowed past window; always include cancelled services
+                if dep_time >= earliest_allowed or cancelled:
                     loads = journey.get("loads", [{}])
                     load_type_raw = loads[0].get("loadType")
                     load_ratio_raw = loads[0].get("ratio")
+                    dep_local = dt_util.as_local(dep_time)
+
+                    if cancelled:
+                        until_display = (
+                            "entfällt" if language.startswith("de") else "cancelled"
+                        )
+                    else:
+                        diff_seconds = int((dep_time - now_utc).total_seconds())
+                        minutes_remaining = max(0, diff_seconds // 60)
+                        if minutes_remaining >= 60:
+                            until_display = dep_local.strftime("%H:%M")
+                        elif minutes_remaining > 0:
+                            until_display = f"{minutes_remaining} min"
+                        else:
+                            until_display = (
+                                "sofort" if language.startswith("de") else "now"
+                            )
 
                     journey_info = {
                         "planned_time": stop.get("plannedDeparture", {}).get(
@@ -255,16 +272,18 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                         "realtime_time": stop.get("realtimeDeparture", {}).get(
                             "isoString"
                         ),
+                        "realtime_time_local": dep_local.strftime("%H:%M"),
                         "label": journey.get("line", {})
                         .get("lineGroup", {})
                         .get("label"),
                         "destination": stop.get("destinationLabel"),
-                        "cancelled": journey.get("cancelled", False),
+                        "cancelled": cancelled,
                         "platform": platform_label,
                         "load_ratio": f"{round(load_ratio_raw * 100)}%"
                         if isinstance(load_ratio_raw, (float, int))
                         else None,
                         "load_type": capacity_levels.get(load_type_raw),
+                        "time_until_departure": until_display,
                     }
                     journeys_info.append((dep_time, journey_info))
 

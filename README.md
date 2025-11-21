@@ -117,29 +117,14 @@ content: |
     {%- for s in sensors %}
       {%- set state = states[s] %}
       {%- if state %}
-        {%- set planned = as_timestamp(state.attributes.planned_time) %}
-        {%- if states('state.attributes.realtime_time') not in ['none', 'unknown', 'unavailable', ''] %}
-        {%- set realtime = as_timestamp(state.attributes.realtime_time) %}
-        {%- else %}
-        {%- set realtime = as_timestamp(state.attributes.planned_time) %}
-        {%- endif %}
-        {%- set departure = realtime if realtime != planned else planned %}
-        {%- set minutes = ((departure - now().timestamp()) / 60) | round(0) %}
-        {%- set is_rt = (realtime != planned) %}
         <tr>
           <td align="center">{{ state.attributes.label }}</td>
           <td align="center">{{ state.attributes.destination }}</td>
           <td align="center">
-            {%- if state.attributes.cancelled -%}
-            <s>cancelled</s>
+            {%- if state.attributes.time_until_departure -%}
+            {{ state.attributes.time_until_departure }}
             {%- else -%}
-
-            {%- if is_rt %}⏱&nbsp;{%- endif %}
-            {%- if minutes <= 0 -%}
-            now
-            {%- else -%}
-              {{ minutes }} min
-            {%- endif -%}
+            {{ state.attributes.realtime_time_local or (state.attributes.realtime_time | default(state.attributes.planned_time) | as_timestamp | timestamp_custom('%H:%M')) }}
             {%- endif -%}
 
           </td>
@@ -177,29 +162,14 @@ content: |
     {%- for s in sensors %}
       {%- set state = states[s] %}
       {%- if state %}
-        {%- set planned = as_timestamp(state.attributes.planned_time) %}
-        {%- if states('state.attributes.realtime_time') not in ['none', 'unknown', 'unavailable', ''] %}
-        {%- set realtime = as_timestamp(state.attributes.realtime_time) %}
-        {%- else %}
-        {%- set realtime = as_timestamp(state.attributes.planned_time) %}
-        {%- endif %}
-        {%- set departure = realtime if realtime != planned else planned %}
-        {%- set minutes = ((departure - now().timestamp()) / 60) | round(0) %}
-        {%- set is_rt = (realtime != planned) %}
         <tr>
           <td align="center">{{ state.attributes.label }}</td>
           <td align="center">{{ state.attributes.destination }}</td>
           <td align="center">
-            {%- if state.attributes.cancelled -%}
-            <s>entfällt</s>
+            {%- if state.attributes.time_until_departure -%}
+            {{ state.attributes.time_until_departure }}
             {%- else -%}
-
-            {%- if is_rt %}⏱&nbsp;{%- endif %}
-            {%- if minutes <= 0 -%}
-            sofort
-            {%- else -%}
-              {{ minutes }} min
-            {%- endif -%}
+            {{ state.attributes.realtime_time_local or (state.attributes.realtime_time | default(state.attributes.planned_time) | as_timestamp | timestamp_custom('%H:%M')) }}
             {%- endif -%}
 
           </td>
@@ -229,4 +199,3 @@ based on the official [RNV OpenData Python Client](https://github.com/Rhein-Neck
 [hacs-url]: https://github.com/mirko-sommer/homeassistant-rnv
 
 [downloads]: https://img.shields.io/github/downloads/mirko-sommer/homeassistant-rnv/total?style=for-the-badge
-
