@@ -180,9 +180,15 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                 except ValueError:
                     continue
 
+                # Check if destination label indicates cancellation
+                destination_label = stop.get("destinationLabel", "")
+                cancelled = journey.get("cancelled", False)
+                if destination_label.strip().lower() == "entfällt":
+                    cancelled = True
+
                 # include departures that are in the future or within the
                 # allowed past window; always include cancelled services
-                if dep_time >= earliest_allowed or journey.get("cancelled", False):
+                if dep_time >= earliest_allowed or cancelled:
                     departures.append(dep_time)
 
         departures.sort()
@@ -239,7 +245,11 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                 except ValueError:
                     continue
 
+                # Check if destination label indicates cancellation
+                destination_label = stop.get("destinationLabel", "")
                 cancelled = journey.get("cancelled", False)
+                if destination_label.strip().lower() == "entfällt":
+                    cancelled = True
 
                 # include departures that are in the future or within the
                 # allowed past window; always include cancelled services
