@@ -16,6 +16,8 @@ Each configured station is represented as a device with separate entities for th
 
 If you find this integration useful, I’d really appreciate a ⭐️. It helps others discover it!
 
+**Why should you use this integration instead of the more general integration [HA-Departures](https://github.com/alex-jung/ha-departures)?** See the discussion in pinned [Issue #9](https://github.com/mirko-sommer/homeassistant-rnv/issues/9). 
+
 ## Obtain API Credentials
 
 To use this integration, you need access credentials for the RNV Open Data API.  
