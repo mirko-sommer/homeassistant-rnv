@@ -14,25 +14,20 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
-from .const import CLIENT_API_URL, DOMAIN, OAUTH_URL_TEMPLATE
+from .const import CLIENT_API_URL, DOMAIN
 from .data_hub_python_client.ClientFunctions import ClientFunctions
+from .data_hub_python_client.MotisFunctions import MotisFunctions
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("tenantid"): str,
-        vol.Required("clientid"): str,
-        vol.Required("clientsecret"): str,
-        vol.Required("resource"): str,
+        vol.Optional("url", default=CLIENT_API_URL): str,
     }
 )
 
 prefixes_by_field: dict[str, tuple[str, ...]] = {
-    "tenantid": ("tenantID=",),
-    "clientid": ("clientID=",),
-    "clientsecret": ("clientSecret=",),
-    "resource": ("resource=",),
+    "url": ("url=",),
 }
 
 
@@ -59,10 +54,7 @@ class RnvHub:
     def __init__(
         self,
         hass: HomeAssistant,
-        tenantid: str,
-        clientid: str,
-        clientsecret: str,
-        resource: str,
+        url: str,
     ) -> None:
         """Initialize RnvHub with authentication parameters.
 
@@ -73,23 +65,11 @@ class RnvHub:
             clientsecret: Client secret for OAuth2.
             resource: Resource identifier for OAuth2.
         """
+        _LOGGER.info(url);
         self.hass = hass
-        self.tenantid = tenantid
-        self.clientid = clientid
-        self.clientsecret = clientsecret
-        self.resource = resource
-        self.options = {
-            "CLIENT_API_URL": CLIENT_API_URL,
-            "OAUTH_URL": OAUTH_URL_TEMPLATE.format(tenantid=tenantid),
-            "CLIENT_ID": self.clientid,
-            "CLIENT_SECRET": self.clientsecret,
-            "RESOURCE_ID": self.resource,
-        }
-        self.at_info = None
-        self._reauth_entry = None  # Initialize _reauth_entry to avoid attribute error
-        self._entry_data = None  # Initialize _entry_data to avoid attribute error
+        self.url = normalize_url(url)
 
-    async def authenticate(self) -> dict[str, Any] | None:
+    async def authenticate(self) -> bool:
         """Authenticate with the RNV API and retrieve an access token.
 
         Returns:
@@ -97,50 +77,18 @@ class RnvHub:
 
         Logs an error if no access token is received or if an exception occurs during authentication.
         """
-        cf = ClientFunctions(self.options)
+        cf = ClientFunctions(self.url)
+        mf = MotisFunctions(cf)
         try:
-            at_info = await self.hass.async_add_executor_job(cf.request_access_token)
-            if not at_info or "access_token" not in at_info:
-                _LOGGER.error("No access token received")
-                return None
-            self.at_info = at_info
+            gc_info = await mf.reverse_geocode(0,0)
+            if gc_info is None:
+                _LOGGER.error("No response from reverse geocode")
+                return False
         except HomeAssistantError as err:
             _LOGGER.error("Authentication failed: %s", err)
-            return None
+            return False
         else:
-            return at_info
-
-    def token_expired(self) -> bool:
-        """Return True if the access token is expired or not available.
-
-        Returns:
-            bool: True if the token is expired or missing, False otherwise.
-        """
-        if not self.at_info:
             return True
-        expires_on = int(self.at_info.get("expires_on", 0))
-        now = int(time.time())
-        return now >= expires_on
-
-    async def get_access_token(self) -> str | None:
-        """Retrieve the current access token, refreshing it if expired.
-
-        Returns:
-            The access token as a string if available, otherwise None.
-        """
-        if self.token_expired():
-            await self.authenticate()
-        if self.at_info:
-            return self.at_info.get("access_token")
-        return None
-
-    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
-        """Handle re-authentication flow."""
-        self._reauth_entry = self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
-        )
-        self._entry_data = entry_data
-        return await self.async_step_user()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -169,32 +117,30 @@ class RnvHub:
             try:
                 if not errors:
                     info = await validate_input(self.hass, sanitized)
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except InvalidAuth:
+            except InvalidConfig:
                 errors["base"] = "invalid_auth"
             except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                if hasattr(self, "_reauth_entry"):
-                    self.hass.config_entries.async_update_entry(
-                        self._reauth_entry,
-                        data=sanitized | {"at_info": info["at_info"]},
-                    )
-                    await self.hass.config_entries.async_reload(
-                        self._reauth_entry.entry_id
-                    )
-                    return self.async_abort(reason="reauth_successful")
-
                 return self.async_create_entry(
-                    title=info["title"], data=sanitized | {"at_info": info["at_info"]}
+                    title=info["title"], data=sanitized | {"url": info["url"]}
                 )
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
+def normalize_url(url: str) -> str:
+    """If input is empty or invalid, set to default URL."""
+    if not url:
+        return CLIENT_API_URL
+    """Ensure the URL does not have trailing slashes."""
+    url = url.rstrip("/")
+    """Ensure the URL starts with http:// or https://"""
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
+    return url
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate user input and authenticate with the RNV API.
@@ -209,20 +155,14 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     Raises:
         InvalidAuth: If authentication fails.
     """
-    hub = RnvHub(
-        hass, data["tenantid"], data["clientid"], data["clientsecret"], data["resource"]
-    )
-    at_info = await hub.authenticate()
-    if at_info is None:
-        raise InvalidAuth
+    hub = RnvHub(hass, data["url"])
+    valid_config = await hub.authenticate()
+    if not valid_config:
+        raise InvalidConfig
 
     return {
         "title": "RNV Public Transport",
-        "at_info": at_info,
-        "tenantid": data["tenantid"],
-        "clientid": data["clientid"],
-        "clientsecret": data["clientsecret"],
-        "resource": data["resource"],
+        "url": data["url"],
     }
 
 
@@ -255,9 +195,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             if not errors:
                 try:
                     info = await validate_input(self.hass, sanitized)
-                except CannotConnect:
-                    errors["base"] = "cannot_connect"
-                except InvalidAuth:
+                except InvalidConfig:
                     errors["base"] = "invalid_auth"
                 except Exception:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected exception")
@@ -265,7 +203,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
                 else:
                     return self.async_create_entry(
                         title=info["title"],
-                        data=sanitized | {"at_info": info["at_info"]},
+                        data=sanitized | {"url": info["url"]},
                     )
 
         return self.async_show_form(
@@ -285,13 +223,8 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
         """
         return RnvOptionsFlowHandler(config_entry)
 
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class InvalidAuth(HomeAssistantError):
-    """Error to indicate there is invalid auth."""
+class InvalidConfig(HomeAssistantError):
+    """Error to indicate there is invalid config."""
 
 
 class RnvOptionsFlowHandler(config_entries.OptionsFlow):
@@ -373,6 +306,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 "id": user_input["station_id"],
                 "platform": user_input.get("platform", ""),
                 "line": user_input.get("line", ""),
+                "radius": user_input.get("radius", ""),
             }
             # Prevent duplicates
             for s in self.stations:

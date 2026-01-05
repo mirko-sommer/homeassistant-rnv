@@ -14,7 +14,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import CLIENT_API_URL, OAUTH_URL_TEMPLATE
+from .const import CLIENT_API_URL
 from .coordinator import RNVCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -399,7 +399,6 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
     tenantid = entry.data.get("tenantid")
     options = {
         "CLIENT_API_URL": CLIENT_API_URL,
-        "OAUTH_URL": OAUTH_URL_TEMPLATE.format(tenantid=tenantid),
         "CLIENT_ID": entry.data.get("clientid"),
         "CLIENT_SECRET": entry.data.get("clientsecret"),
         "RESOURCE_ID": entry.data.get("resource"),

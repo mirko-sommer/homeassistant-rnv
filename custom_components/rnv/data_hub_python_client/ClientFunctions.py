@@ -3,101 +3,109 @@
 This module provides the ClientFunctions class for requesting access tokens and querying the Data Hub API.
 Based on: https://github.com/Rhein-Neckar-Verkehr/data-hub-python-client
 """
-
-import json
+import asyncio
 import logging
+from typing import Any, Optional
 
-import requests
-from requests.exceptions import RequestException, SSLError, Timeout
+import aiohttp
+from aiohttp import ClientError, ClientResponseError, ClientSSLError
+
+from ..const import CLIENT_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class ClientFunctions:
-    """Functions for interacting with the RNV data hub API."""
+    """Async functions for interacting with the RNV data hub API."""
 
-    def __init__(self, opts: dict) -> None:
-        """Initialize ClientFunctions."""
-        self.opts = opts
+    def __init__(self, url: str, session: Optional[aiohttp.ClientSession] = None) -> None:
+        self.url = url
+        self._session = session
 
-    def request_access_token(self) -> dict | None:
-        """Request an access token from the oauth2 authorization server.
-
-        :return: Access token message body or None if failed.
-        """
-        if not self.opts.get("OAUTH_URL"):
-            raise ValueError("OAUTH_URL is missing from opts or is None.")
-
-        payload = {
-            "grant_type": "client_credentials",
-            "client_id": self.opts["CLIENT_ID"],
-            "client_secret": self.opts["CLIENT_SECRET"],
-            "resource": self.opts["RESOURCE_ID"],
-        }
-
-        try:
-            response = requests.post(
-                self.opts["OAUTH_URL"],
-                data=payload,
-                timeout=10,
-            )
-            response.raise_for_status()
-            return response.json()
-
-        except SSLError as e:
-            _LOGGER.error("SSL error while requesting access token: %s", e)
-            raise
-        except Timeout:
-            _LOGGER.error("Request timed out while requesting access token")
-            raise
-        except RequestException as e:
-            _LOGGER.error(
-                "HTTP error while requesting access token: %s — %s",
-                e,
-                getattr(e.response, "text", "<no body>"),
-            )
-            raise
-        except Exception:
-            _LOGGER.exception("Unexpected error requesting access token")
-            raise
-
-    def request_query_response(self, query: str, at_response: dict) -> dict | None:
-        """Do GraphQL query in a POST request and obtain the response from Data Hub API.
-
-        :param query: GraphQL query as string.
-        :param at_response: Access token message body.
-        :return: Query response message body or None if failed.
-        """
-        post_data_str = json.dumps({"query": query})
+    async def get(self, path: str, params: dict | None = None) -> dict | None:
+        """Async GET request. If a session was not provided, use a temporary one."""
+        full_url = f"{self.url}/{path}"
         headers = {
-            "Authorization": f"Bearer {at_response['access_token']}",
-            "Content-Type": "application/json",
-            "Content-Length": str(len(post_data_str)),
+            "User-Agent": CLIENT_NAME,
+            "Accept": "application/json",
         }
+        timeout = aiohttp.ClientTimeout(total=10)
 
+        session = self._session
+        if session is None:
+            async with aiohttp.ClientSession() as session:
+                return await self._do_get(session, full_url, headers, params, timeout)
+        return await self._do_get(session, full_url, headers, params, timeout)
+
+    async def _do_get(
+        self,
+        session: aiohttp.ClientSession,
+        full_url: str,
+        headers: dict[str, str],
+        params: Optional[dict],
+        timeout: aiohttp.ClientTimeout,
+    ) -> dict | None:
         try:
-            response = requests.post(
-                self.opts["CLIENT_API_URL"],
-                headers=headers,
-                data=post_data_str,
-                timeout=10,
-            )
-            response.raise_for_status()
-            return response.json()
+            async with session.get(full_url, headers=headers, params=params, timeout=timeout) as resp:
+                resp.raise_for_status()
+                return await resp.json()
+        except ClientSSLError as e:
+            _LOGGER.error("SSL error during GET request: %s", e)
+            raise
+        except asyncio.TimeoutError:
+            _LOGGER.error("Request timed out during GET request")
+            raise
+        except ClientResponseError as e:
+            # ClientResponseError does not always include body; log status/message
+            _LOGGER.error("HTTP error during GET request: %s (status=%s)", e.message, e.status)
+            raise
+        except ClientError as e:
+            _LOGGER.error("HTTP client error during GET request: %s", e)
+            raise
+        except Exception as e:
+            _LOGGER.exception("Unexpected error during GET request: %s", e)
+            raise
 
-        except SSLError as e:
-            _LOGGER.error("SSL error during GraphQL query: %s", e)
+    async def post(self, path: str, data: dict) -> dict | None:
+        """Async POST request. Sends JSON body."""
+        full_url = f"{self.url}/{path}"
+        headers = {
+            "User-Agent": CLIENT_NAME,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        session = self._session
+        if session is None:
+            async with aiohttp.ClientSession() as session:
+                return await self._do_post(session, full_url, headers, data, timeout)
+        return await self._do_post(session, full_url, headers, data, timeout)
+
+    async def _do_post(
+        self,
+        session: aiohttp.ClientSession,
+        full_url: str,
+        headers: dict[str, str],
+        data: dict,
+        timeout: aiohttp.ClientTimeout,
+    ) -> dict | None:
+        try:
+            async with session.post(full_url, headers=headers, json=data, timeout=timeout) as resp:
+                resp.raise_for_status()
+                return await resp.json()
+        except ClientSSLError as e:
+            _LOGGER.error("SSL error during POST request: %s", e)
             raise
-        except Timeout:
-            _LOGGER.error("Request timed out during GraphQL query")
+        except asyncio.TimeoutError:
+            _LOGGER.error("Request timed out during POST request")
             raise
-        except RequestException as e:
-            _LOGGER.error(
-                "HTTP error during GraphQL query: %s — %s",
-                e,
-                getattr(e.response, "text", "<no body>"),
-            )
+        except ClientResponseError as e:
+            _LOGGER.error("HTTP error during POST request: %s (status=%s)", e.message, e.status)
             raise
-        except Exception:
-            _LOGGER.exception("Unexpected error during GraphQL query")
+        except ClientError as e:
+            _LOGGER.error("HTTP client error during POST request: %s", e)
+            raise
+        except Exception as e:
+            _LOGGER.exception("Unexpected error during POST request: %s", e)
             raise

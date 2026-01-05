@@ -17,10 +17,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: RnvConfigEntry) -> bool:
     """Set up RNV integration from a config entry."""
     api = RnvHub(
         hass,
-        entry.data["tenantid"],
-        entry.data["clientid"],
-        entry.data["clientsecret"],
-        entry.data["resource"],
+        entry.data["url"],
     )
 
     hass.data.setdefault(DOMAIN, {})
