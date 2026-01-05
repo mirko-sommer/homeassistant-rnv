@@ -7,6 +7,7 @@ from RNV stations, including next, second, and third departures, with platform a
 from datetime import UTC, datetime, timedelta
 import logging
 from typing import Any
+import re
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -55,6 +56,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         station_id: str,
         platform: str,
         line: str,
+        destinationLabel_filter: str, 
         departure_index: int,
     ) -> None:
         """Initialize the RNVBaseSensor."""
@@ -62,6 +64,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         self._station_id = station_id
         self._platform = platform or ""
         self._line = line or ""
+        self._destinationLabel_filter = destinationLabel_filter or ""
         self._departure_index = departure_index
         # restored state/attributes populated in async_added_to_hass
         self._restored_state: str | None = None
@@ -126,11 +129,34 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for the RNV station sensor."""
         return DeviceInfo(
-            identifiers={(self._station_id, self._platform, self._line)},
-            name=f"RNV Station {self._station_id}{f' {self._platform}' if self._platform else ''}{f' {self._line}' if self._line else ''}",
+            identifiers={(self._station_id, self._platform, self._line, self._destinationLabel_filter)},
+            name=f"RNV Station {self._station_id}{f' {self._platform}' if self._platform else ''}{f' {self._line}' if self._line else ''}{f' {self._destinationLabel_filter}' if self._destinationLabel_filter else ''}",
             manufacturer="Rhein-Neckar-Verkehr GmbH",
             model="Live Departures",
         )
+        
+    def _get_desired_stops(self, journey: dict) -> dict:
+        """Return journey filtered to only non-invalid anddesired stops"""
+
+        # Filter out invalid stops (e.g., destination label contains "$")
+        stops = journey.get("stops", [])
+        filtered_stops = [
+            s for s in stops if "$" not in s.get("destinationLabel", "")
+        ]
+        
+        # If a destination filter is defined, apply it. 
+        if self._destinationLabel_filter:
+            # Filter out undesired end locations
+            re_destinationLabel_filter = re.compile(self._destinationLabel_filter)
+            filtered_stops = [
+                s for s in filtered_stops if re_destinationLabel_filter.search(s.get("destinationLabel", ""))
+            ]
+
+        if filtered_stops is not stops:
+            # Persist the filtered list back into the cached coordinator data
+            # so other sensors won't see invalid entries either
+            journey["stops"] = filtered_stops
+        return filtered_stops
 
     def _extract_departure(self, index: int) -> str | None:
         """Extract the ISO formatted departure time at the given index."""
@@ -149,16 +175,8 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         language = (self.hass.config.language or "en").lower()
 
         for journey in elements:
-            # Filter out invalid stops (e.g., destination label contains "$")
-            stops = journey.get("stops", [])
-            filtered_stops = [
-                s for s in stops if "$" not in s.get("destinationLabel", "")
-            ]
-            if filtered_stops is not stops:
-                # Persist the filtered list back into the cached coordinator data
-                # so other sensors won't see invalid entries either
-                journey["stops"] = filtered_stops
-
+            filtered_stops = self._get_desired_stops(journey)
+            
             for stop in filtered_stops:
                 platform_label = stop.get("pole", {}).get("platform", {}).get("label")
                 line = journey.get("line", {}).get("lineGroup", {}).get("label")
@@ -215,15 +233,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         language = (self.hass.config.language or "en").lower()
 
         for journey in elements:
-            # Filter out invalid stops (e.g., destination label contains "$")
-            stops = journey.get("stops", [])
-            filtered_stops = [
-                s for s in stops if "$" not in s.get("destinationLabel", "")
-            ]
-            if filtered_stops is not stops:
-                # Persist the filtered list back into the cached coordinator data
-                journey["stops"] = filtered_stops
-
+            filtered_stops = self._get_desired_stops(journey)
             for stop in filtered_stops:
                 platform_label = stop.get("pole", {}).get("platform", {}).get("label")
                 line = journey.get("line", {}).get("lineGroup", {}).get("label")
@@ -302,6 +312,10 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         if index is not None and index < len(journeys_info):
             return journeys_info[index][1]
         return None
+        
+    def _unique_base_id(self) -> str:
+        """Return a unique base ID for derived classes to amend."""
+        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}{f'_filter{str(hash(self._destinationLabel_filter))[:6]}' if self._destinationLabel_filter else ''}"
 
 
 class RNVNextDepartureSensor(RNVBaseSensor):
@@ -318,8 +332,8 @@ class RNVNextDepartureSensor(RNVBaseSensor):
     @property
     def unique_id(self) -> str:
         """Return the unique ID for the next departure sensor."""
-        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_next"
-
+        return self._unique_base_id()+"_next"
+        
     @property
     def state(self) -> str | None:
         """Return the ISO formatted departure time for the next upcoming departure."""
@@ -345,7 +359,7 @@ class RNVNextNextDepartureSensor(RNVBaseSensor):
     @property
     def unique_id(self) -> str:
         """Return the unique ID for the second departure sensor."""
-        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_second"
+        return self._unique_base_id()+"_second"
 
     @property
     def state(self) -> str | None:
@@ -372,7 +386,7 @@ class RNVNextNextNextDepartureSensor(RNVBaseSensor):
     @property
     def unique_id(self) -> str:
         """Return the unique ID for the third departure sensor."""
-        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_third"
+        return self._unique_base_id()+"_third"
 
     @property
     def state(self) -> str | None:
@@ -419,6 +433,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         station_id = station["id"]
         platform = station.get("platform", "")
         line = station.get("line", "")
+        destinationLabel_filter = station.get("destinationLabel_filter", "") #JD
 
         coordinator = RNVCoordinator(
             hass,
@@ -437,6 +452,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 station_id,
                 platform,
                 line,
+                destinationLabel_filter, 
                 departure_index=0,
             )
         )
@@ -446,6 +462,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 station_id,
                 platform,
                 line,
+                destinationLabel_filter,                 
                 departure_index=1,
             )
         )
@@ -455,6 +472,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 station_id,
                 platform,
                 line,
+                destinationLabel_filter,             
                 departure_index=2,
             )
         )

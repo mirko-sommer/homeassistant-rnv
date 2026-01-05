@@ -78,6 +78,10 @@ The station ID (hafasId) can be found in a json file [here](https://www.opendata
 | `station_id` | string | The unique identifier of the station (hafasID from json file, e.g. "1144" for "Betriebshof"). | Yes      | —       |
 | `platform`   | string | Optional platform number (e.g. "A", "B", ...). | No       | (empty) |
 | `line`       | string | Optional specific line to monitor at the station (e.g. "33", "24", ...). | No       | (empty) |
+| `destination filter` | string | Optional to filter for destinations | No | (empty, filtering nothing) |
+
+##### **Destination Filter:**  
+The destination filter needs to be a regular expression, in the simplest case just the name of the destination. This can be `Bismarckplatz` for example. You can choose more complex rules such as filtering out destinations `^((?!Bismarckplatz).)*$`, which might be beneficial depending on your needs.  
 
 #### **Remove a station:**  
 Select a station from your saved list to remove it (this also deletes associated devices).
