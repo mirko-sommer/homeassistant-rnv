@@ -19,22 +19,38 @@
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
     }
   },
+  "selector": {
+    "action": {
+        "options": {
+          "add": "➕ Add Station",
+          "remove": "🗑️ Remove Station",
+          "finish": "✅ Save and Exit"
+      }
+    }
+  },
   "options": {
     "step": {
       "menu": {
         "title": "Manage Stations",
-        "description": "Choose an action to manage your stations:\n\n➕ Add station\n🗑️ Remove Station\n✅ Save and exit",
         "data": {
-          "action": "Action"
+          "action": "Choose an action to manage your stations:"
         }
       },
-      "add_station": {
-        "title": "Add a Station",
-        "description": "Provide the details of the station you want to add.\nThe station ID (hafasId) can be found in a json file [here](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/datensaetze?id=1405&tx_vrrkit_view[dataset_name]=haltestellendaten-rnv&tx_vrrkit_view[action]=details&tx_vrrkit_view[controller]=View).",
+      "search_station": {
+        "title": "Search for a Station",
+        "description": "Enter the name of the station you want to add. In the next step, you can select the correct station from the search results.",
+        "data": {
+          "search_query": "Station Name"
+        }
+      },
+      "select_station": {
+        "title": "Select a Station",
+        "description": "Select the station you want to add from the search results and optionally configure platform and line.",
         "data": {
           "station_id": "Station ID (hafasId)",
           "platform": "Platform (optional)",
-          "line": "Line (optional)"
+          "line": "Line (optional)",
+            "radius": "Search radius (in meters)"
         }
       },
       "remove_station": {

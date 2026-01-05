@@ -53,6 +53,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         self,
         coordinator: RNVCoordinator,
         station_id: str,
+        station_name: str,
         platform: str,
         line: str,
         departure_index: int,
@@ -60,7 +61,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         """Initialize the RNVBaseSensor."""
         super().__init__(coordinator)
         self._station_id = station_id
-        self._station_name = coordinator.station_name
+        self._station_name = station_name
         self._platform = platform or ""
         self._line = line or ""
         self._departure_index = departure_index
@@ -330,6 +331,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
     entities = []
     for station in station_data:
         station_id = station["id"]
+        station_name = station.get("name", "")
         platform = station.get("platform", "")
         line = station.get("line", "")
 
@@ -339,6 +341,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
             station.get("radius", 50),
             at_info,
             station_id,
+            station_name,
             platform,
             line,
             entry,
@@ -349,6 +352,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
             RNVNextDepartureSensor(
                 coordinator,
                 station_id,
+                station_name,
                 platform,
                 line,
                 departure_index=0,
@@ -358,6 +362,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
             RNVNextNextDepartureSensor(
                 coordinator,
                 station_id,
+                station_name,
                 platform,
                 line,
                 departure_index=1,
@@ -367,6 +372,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
             RNVNextNextNextDepartureSensor(
                 coordinator,
                 station_id,
+                station_name,
                 platform,
                 line,
                 departure_index=2,

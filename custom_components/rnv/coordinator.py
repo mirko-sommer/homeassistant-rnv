@@ -26,6 +26,7 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         radius: int,
         at_info: dict[str, Any],
         station_id: str,
+        station_name: str,
         platform: str,
         line: str,
         config_entry,
@@ -35,6 +36,7 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._radius = radius
         self._at_info = at_info
         self._station_id = station_id
+        self._station_name = station_name
         self._platform = platform
         self._line = line
         self.station_name = ""
@@ -43,7 +45,7 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             logger=_LOGGER,
-            name=f"Motis {station_id} {platform} {line}",
+            name=f"Motis {station_name} ({station_id}), {platform}, {line}, radius: {radius}",
             update_interval=timedelta(seconds=60),
             config_entry=config_entry,
         )

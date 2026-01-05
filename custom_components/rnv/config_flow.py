@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
 
 import voluptuous as vol
@@ -239,6 +238,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
         Args:
             config_entry: The configuration entry for the RNV integration.
         """
+        self.found_stations = []
         self.stations = list(config_entry.options.get("stations", []))
         self.hass = None  # wird in async_step_init gesetzt
 
@@ -254,7 +254,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
         self.hass = self.hass or self._config_entry.hass
         return await self.async_step_menu()
 
-    async def async_step_menu(self, user_input=None):
+    async def async_step_menu(self, user_input=None, errors=None):
         """Handle the menu step in the options flow.
 
         Presents actions to add, remove, or finish editing stations.
@@ -268,7 +268,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             action = user_input["action"]
             if action == "add":
-                return await self.async_step_add_station()
+                return await self.async_step_search_station()
             if action == "remove":
                 return await self.async_step_remove_station()
             if action == "finish":
@@ -282,13 +282,89 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     vol.Required("action"): vol.In(
                         {
-                            "add": "➕",
-                            "remove": "🗑️",
-                            "finish": "✅",
+                            "add",
+                            "remove",
+                            "finish",
                         }
                     )
                 }
             ),
+            errors=errors,
+        )
+
+    async def async_step_search_station(self, user_input=None):
+        """Handle the step to search for a station in the options flow.
+
+        Args:
+            user_input: Optional user input containing search query.
+
+        Returns:
+            The result of the next step in the options flow.
+        """
+        errors = {}
+        if user_input is not None:
+            query = user_input["search_query"]
+            # get url from config entry data
+            url = self.config_entry.data.get("url")
+            cf = ClientFunctions(url)
+            mf = MotisFunctions(cf)
+            try:
+                geocode_result = await mf.geocode(query)
+                if geocode_result is None or len(geocode_result) == 0:
+                    errors["base"] = "no_stations_found"
+                else:
+                    self.found_stations = geocode_result
+                    return await self.async_step_select_station()
+            except Exception as e:
+                _LOGGER.error("Error during station search: %s", e)
+                errors["base"] = "search_error"
+
+        return self.async_show_form(
+            step_id="search_station",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("search_query"): str,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_select_station(self, user_input=None, errors=None):
+        """Handle the step to select a station from search results in the options flow.
+
+        Args:
+            user_input: Optional user input specifying which station to select.
+            errors: Optional dictionary of errors to display.
+        """
+        if user_input is not None:
+            selected_index = int(user_input["selected_station"])
+            selected_station = self.found_stations[selected_index]
+            return await self.async_step_add_station(
+                {
+                    "station_id": selected_station["id"],
+                    "station_name": selected_station["name"],
+                    "platform": selected_station.get("platform", ""),
+                    "line": selected_station.get("line", ""),
+                    "radius": user_input.get("radius", "50"),
+                }
+            )
+
+        stations_dict = {
+            str(idx): f"{s['name']} ({s['id']})"
+            for idx, s in enumerate(self.found_stations)
+        }
+
+        return self.async_show_form(
+            step_id="select_station",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("selected_station"): vol.In(stations_dict),
+                    vol.Optional("platform", default=""): str,
+                    vol.Optional("line", default=""): str,
+                    vol.Required("radius", default="50"): str,
+                }
+            ),
+            errors=errors,
         )
 
     async def async_step_add_station(self, user_input=None):
@@ -304,6 +380,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             new_station = {
                 "id": user_input["station_id"],
+                "name": user_input.get("station_name", ""),
                 "platform": user_input.get("platform", ""),
                 "line": user_input.get("line", ""),
                 "radius": user_input.get("radius", "0"),
@@ -322,17 +399,15 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 self.stations.append(new_station)
                 return await self.async_step_menu()
 
-        return self.async_show_form(
-            step_id="add_station",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("station_id"): str,
-                    vol.Optional("platform", default=""): str,
-                    vol.Optional("line", default=""): str,
-                    vol.Optional("radius", default="50"): str,
-                }
-            ),
-            errors=errors,
+        return await self.async_step_menu(
+            {
+                "station_id": user_input.get("station_id", ""),
+                "station_name": user_input.get("station_name", ""),
+                "platform": user_input.get("platform", ""),
+                "line": user_input.get("line", ""),
+                "radius": user_input.get("radius", "50"),
+            },
+            errors
         )
 
     async def async_step_remove_station(self, user_input=None):
@@ -347,10 +422,12 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
         if not self.stations:
             return await self.async_step_menu()
 
+        _LOGGER.info(self.stations)
+
         stations_dict = {
-            str(idx): f"{s['id']} ({', '.join([v for v in (s.get('platform'), s.get('line')) if v])})"
-            if s.get("platform") or s.get("line")
-            else f"{s['id']}"
+            str(idx): f"{s['name']} ({s['id']}) ({', '.join([v for v in (s.get('platform'), s.get('line'), s.get('radius')) if v])})"
+            if s.get("platform") or s.get("line") or s.get("radius")
+            else s['name'] + f"{s['id']}"
             for idx, s in enumerate(self.stations)
         }
 

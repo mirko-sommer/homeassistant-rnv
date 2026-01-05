@@ -19,22 +19,38 @@
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
     }
   },
+  "selector": {
+    "action": {
+        "options": {
+          "add": "➕ Haltestelle hinzufügen",
+          "remove": "🗑️ Haltestelle entfernen",
+          "finish": "✅ Speichern und beenden"
+      }
+    }
+  },
   "options": {
     "step": {
       "menu": {
         "title": "Stationen verwalten",
-        "description": "Wähle eine Aktion, um deine Haltestellen zu verwalten:\n\n➕ Haltestelle hinzufügen\n🗑️ Haltestelle entfernen\n✅ Speichern und beenden",
         "data": {
-          "action": "Aktion"
+          "action": "Wähle eine Aktion, um deine Haltestellen zu verwalten:"
         }
       },
-      "add_station": {
-        "title": "Haltestelle hinzufügen",
-        "description": "Gib die Details der hinzuzufügenden Haltestelle an.\nDie Haltestellen-ID (hafasId) findest du in einer json-Datei [hier](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/datensaetze?id=1405&tx_vrrkit_view[dataset_name]=haltestellendaten-rnv&tx_vrrkit_view[action]=details&tx_vrrkit_view[controller]=View).",
+      "search_station": {
+        "title": "Nach einer Haltestelle suchen",
+        "description": "Gib den Namen der Haltestelle ein, die du hinzufügen möchtest. Im nächsten Schritt kannst du die richtige Haltestelle aus den Suchergebnissen auswählen.",
+        "data": {
+          "search_query": "Haltestellenname"
+        }
+      },
+      "select_station": {
+        "title": "Haltestelle auswählen",
+        "description": "Wähle die Haltestelle aus den Suchergebnissen aus, die du hinzufügen möchtest und konfiguriere optional Bahnsteig und Linie.",
         "data": {
           "station_id": "Haltestellen-ID (hafasId)",
           "platform": "Steig (optional)",
-          "line": "Linie (optional)"
+          "line": "Linie (optional)",
+          "radius": "Suchradius (in Metern)"
         }
       },
       "remove_station": {

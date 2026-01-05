@@ -33,3 +33,15 @@ class MotisFunctions:
             "n": 10
         }
         return await self.cf.get("v5/stoptimes", params=params)
+
+    async def geocode(self, query: str) -> dict | None:
+        """Perform geocoding to get location details from a query string.
+
+        :param query: The query string for the location.
+        :return: The JSON response as a dictionary or None if failed.
+        """
+        params = {
+            "text": query,
+            "type": "STOP",
+        }
+        return await self.cf.get("v1/geocode", params=params)
