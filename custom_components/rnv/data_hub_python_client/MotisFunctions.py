@@ -18,3 +18,18 @@ class MotisFunctions:
             "place": f"{latitude},{longitude}"
         }
         return await self.cf.get("v1/reverse-geocode", params=params)
+
+    async def departures(self, stop_id: str, time: str) -> dict | None:
+        """Get departures for a specific stop.
+
+        :param stop_id: The ID of the stop.
+        :param time: The time for which to get departures.
+        :return: The JSON response as a dictionary or None if failed.
+        """
+        params = {
+            "stopId": stop_id,
+            "radius": 50,
+            "time": time,
+            "n": 10
+        }
+        return await self.cf.get("v5/stoptimes", params=params)

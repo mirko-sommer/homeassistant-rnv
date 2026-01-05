@@ -60,6 +60,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         """Initialize the RNVBaseSensor."""
         super().__init__(coordinator)
         self._station_id = station_id
+        self._station_name = coordinator.station_name
         self._platform = platform or ""
         self._line = line or ""
         self._departure_index = departure_index
@@ -127,177 +128,93 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         """Return device information for the RNV station sensor."""
         return DeviceInfo(
             identifiers={(self._station_id, self._platform, self._line)},
-            name=f"RNV Station {self._station_id}{f' {self._platform}' if self._platform else ''}{f' {self._line}' if self._line else ''}",
-            manufacturer="Rhein-Neckar-Verkehr GmbH",
+            name=f"Motis Station {self._station_name} ({self._station_id}{f' {self._platform}' if self._platform else ''}{f' {self._line}' if self._line else ''})",
+            manufacturer="Motis",
             model="Live Departures",
         )
 
-    def _extract_departure(self, index: int) -> str | None:
-        """Extract the ISO formatted departure time at the given index."""
-        try:
-            elements = self.coordinator.data["data"]["station"]["journeys"]["elements"]
-        except (KeyError, TypeError):
-            return None
-
-        now_utc = datetime.now(UTC)
-        # allow departures up to RNV_DEPARTURE_VALID_MINUTES minutes in the past to account for
-        # small clock skews or delays; anything older should be treated
-        # as past and not considered an upcoming departure
-        earliest_allowed = now_utc - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
-        departures = []
-
-        language = (self.hass.config.language or "en").lower()
-
-        for journey in elements:
-            # Filter out invalid stops (e.g., destination label contains "$")
-            stops = journey.get("stops", [])
-            filtered_stops = [
-                s for s in stops if "$" not in s.get("destinationLabel", "")
-            ]
-            if filtered_stops is not stops:
-                # Persist the filtered list back into the cached coordinator data
-                # so other sensors won't see invalid entries either
-                journey["stops"] = filtered_stops
-
-            for stop in filtered_stops:
-                platform_label = stop.get("pole", {}).get("platform", {}).get("label")
-                line = journey.get("line", {}).get("lineGroup", {}).get("label")
-
-                if self._platform and platform_label != self._platform:
-                    continue
-
-                if self._line and line != self._line:
-                    continue
-
-                dep_str = stop.get("realtimeDeparture", {}).get(
-                    "isoString"
-                ) or stop.get("plannedDeparture", {}).get("isoString")
-                if not dep_str:
-                    continue
-
-                try:
-                    dep_time = datetime.fromisoformat(dep_str)
-                except ValueError:
-                    continue
-
-                # Check if destination label indicates cancellation
-                destination_label = stop.get("destinationLabel", "")
-                cancelled = journey.get("cancelled", False)
-                if destination_label.strip().lower() == "entfällt":
-                    cancelled = True
-
-                # include departures that are in the future or within the
-                # allowed past window; always include cancelled services
-                if dep_time >= earliest_allowed or cancelled:
-                    departures.append(dep_time)
-
-        departures.sort()
-        if index is not None and index < len(departures):
-            return departures[index].isoformat()
-        return None
-
-    def _extract_journey_info(self, index: int) -> dict[str, Any] | None:
+    def _extract_journey_data(self) -> list[Any] | None:
         """Extract journey info with only realtime and planned times at given index."""
         try:
-            elements = self.coordinator.data["data"]["station"]["journeys"]["elements"]
+            elements = self.coordinator.data["stopTimes"]
         except (KeyError, TypeError):
             return None
 
-        capacity_levels = {
-            "NA": "Nicht vorhanden",
-            "I": "I - empty - leer",
-            "II": "II - light - mittel-voll",
-            "III": "III - full - voll",
-        }
         now_utc = datetime.now(UTC)
         earliest_allowed = now_utc - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
         journeys_info = []
         language = (self.hass.config.language or "en").lower()
 
-        for journey in elements:
-            # Filter out invalid stops (e.g., destination label contains "$")
-            stops = journey.get("stops", [])
-            filtered_stops = [
-                s for s in stops if "$" not in s.get("destinationLabel", "")
-            ]
-            if filtered_stops is not stops:
-                # Persist the filtered list back into the cached coordinator data
-                journey["stops"] = filtered_stops
+        for stop in elements:
+            place = stop.get("place", {})
+            platform_label = place.get("track", "")
+            line = stop.get("displayName", "")
 
-            for stop in filtered_stops:
-                platform_label = stop.get("pole", {}).get("platform", {}).get("label")
-                line = journey.get("line", {}).get("lineGroup", {}).get("label")
+            if self._platform and platform_label != self._platform:
+                continue
 
-                if self._platform and platform_label != self._platform:
-                    continue
+            if self._line and line != self._line:
+                continue
 
-                if self._line and line != self._line:
-                    continue
+            dep_str = place.get("departure") or place.get("arrival")
+            if not dep_str:
+                continue
 
-                dep_str = stop.get("realtimeDeparture", {}).get(
-                    "isoString"
-                ) or stop.get("plannedDeparture", {}).get("isoString")
-                if not dep_str:
-                    continue
+            try:
+                dep_time = datetime.fromisoformat(dep_str)
+            except ValueError:
+                continue
 
-                try:
-                    dep_time = datetime.fromisoformat(dep_str)
-                except ValueError:
-                    continue
+            # Check if destination label indicates cancellation
+            cancelled = stop.get("cancelled", False)
 
-                # Check if destination label indicates cancellation
-                destination_label = stop.get("destinationLabel", "")
-                cancelled = journey.get("cancelled", False)
-                if destination_label.strip().lower() == "entfällt":
-                    cancelled = True
+            # include departures that are in the future or within the
+            # allowed past window; always include cancelled services
+            if dep_time >= earliest_allowed or cancelled:
+                dep_local = dt_util.as_local(dep_time)
 
-                # include departures that are in the future or within the
-                # allowed past window; always include cancelled services
-                if dep_time >= earliest_allowed or cancelled:
-                    loads = journey.get("loads", [{}])
-                    load_type_raw = loads[0].get("loadType")
-                    load_ratio_raw = loads[0].get("ratio")
-                    dep_local = dt_util.as_local(dep_time)
-
-                    if cancelled:
-                        until_display = (
-                            "entfällt" if language.startswith("de") else "cancelled"
-                        )
+                if cancelled:
+                    until_display = (
+                        "entfällt" if language.startswith("de") else "cancelled"
+                    )
+                else:
+                    diff_seconds = int((dep_time - now_utc).total_seconds())
+                    minutes_remaining = max(0, diff_seconds // 60)
+                    if minutes_remaining >= 60:
+                        until_display = dep_local.strftime("%H:%M")
+                    elif minutes_remaining > 0:
+                        until_display = f"{minutes_remaining} min"
                     else:
-                        diff_seconds = int((dep_time - now_utc).total_seconds())
-                        minutes_remaining = max(0, diff_seconds // 60)
-                        if minutes_remaining >= 60:
-                            until_display = dep_local.strftime("%H:%M")
-                        elif minutes_remaining > 0:
-                            until_display = f"{minutes_remaining} min"
-                        else:
-                            until_display = (
-                                "sofort" if language.startswith("de") else "now"
-                            )
+                        until_display = (
+                            "sofort" if language.startswith("de") else "now"
+                        )
 
-                    journey_info = {
-                        "planned_time": stop.get("plannedDeparture", {}).get(
-                            "isoString"
-                        ),
-                        "realtime_time": stop.get("realtimeDeparture", {}).get(
-                            "isoString"
-                        ),
-                        "realtime_time_local": dep_local.strftime("%H:%M"),
-                        "label": journey.get("line", {})
-                        .get("lineGroup", {})
-                        .get("label"),
-                        "destination": stop.get("destinationLabel"),
-                        "cancelled": cancelled,
-                        "platform": platform_label,
-                        "load_ratio": f"{round(load_ratio_raw * 100)}%"
-                        if isinstance(load_ratio_raw, (float, int))
-                        else None,
-                        "load_type": capacity_levels.get(load_type_raw),
-                        "time_until_departure": until_display,
-                    }
-                    journeys_info.append((dep_time, journey_info))
+                journey_info = {
+                    "planned_time": place.get("scheduledDeparture", ""),
+                    "realtime_time": place.get("departure", ""),
+                    "realtime_time_local": dep_local.strftime("%H:%M"),
+                    "label": stop.get("displayName", ""),
+                    "destination": stop.get("headsign"),
+                    "cancelled": cancelled,
+                    "platform": platform_label,
+                    "time_until_departure": until_display,
+                }
+                journeys_info.append((dep_time, journey_info))
 
         journeys_info.sort(key=lambda tup: tup[0])
+        return journeys_info
+
+
+    def _extract_departure(self, index: int) -> str | None:
+        """Extract the ISO formatted departure time at the given index."""
+        departures = self._extract_journey_data() or []
+
+        if index is not None and index < len(departures):
+            return departures[index][0].isoformat()
+        return None
+
+    def _extract_journey_info(self, index: int) -> dict[str, Any] | None:
+        journeys_info = self._extract_journey_data() or []
 
         if index is not None and index < len(journeys_info):
             return journeys_info[index][1]
@@ -396,13 +313,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         async_add_entities: Function to add entities to Home Assistant.
     """
     at_info = entry.data.get("at_info")
-    tenantid = entry.data.get("tenantid")
-    options = {
-        "CLIENT_API_URL": CLIENT_API_URL,
-        "CLIENT_ID": entry.data.get("clientid"),
-        "CLIENT_SECRET": entry.data.get("clientsecret"),
-        "RESOURCE_ID": entry.data.get("resource"),
-    }
+    url = entry.data.get("url")
 
     # MIGRATION: If options are empty but stations exist in data, migrate them
     if not entry.options.get("stations") and entry.data.get("stations"):
@@ -421,7 +332,8 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
 
         coordinator = RNVCoordinator(
             hass,
-            options,
+            url,
+            station.get("radius", 50),
             at_info,
             station_id,
             platform,

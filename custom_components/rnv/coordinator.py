@@ -11,17 +11,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .data_hub_python_client.ClientFunctions import ClientFunctions
+from .data_hub_python_client.MotisFunctions import MotisFunctions
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Coordinator to fetch RNV departure data."""
+    """Coordinator to fetch Motis departure data."""
 
     def __init__(
         self,
         hass: HomeAssistant,
-        options: dict[str, Any],
+        url: str,
+        radius: int,
         at_info: dict[str, Any],
         station_id: str,
         platform: str,
@@ -29,105 +31,33 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         config_entry,
     ) -> None:
         """Initialize the coordinator."""
-        self._client = ClientFunctions(options)
+        self._client = MotisFunctions(ClientFunctions(url))
+        self._radius = radius
         self._at_info = at_info
         self._station_id = station_id
         self._platform = platform
         self._line = line
-        self._options = options
+        self.station_name = ""
 
         # Poll every 60 seconds (cloud service minimum)
         super().__init__(
             hass,
             logger=_LOGGER,
-            name=f"RNV {station_id} {platform} {line}",
+            name=f"Motis {station_id} {platform} {line}",
             update_interval=timedelta(seconds=60),
             config_entry=config_entry,
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from RNV API."""
-        expires_on = int(self._at_info.get("expires_on", 0))
-        now_ts = int(time.time())
-        if now_ts >= expires_on:
-            try:
-                new_at_info = await self.hass.async_add_executor_job(
-                    self._client.request_access_token
-                )
-            except Exception as err:
-                # Treat token retrieval errors as transient update failures
-                # so the sensor preserves its previous state
-                raise UpdateFailed(
-                    f"Error requesting access token for RNV API: {err}"
-                ) from err
-
-            if new_at_info and "access_token" in new_at_info:
-                self._at_info = new_at_info
-            else:
-                raise UpdateFailed("Token expired or authentication failed.")
-
-        current_utc = (
-            datetime.now(UTC)
-            .replace(second=0, microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z")
-        )
-
+        """Fetch data from Motis API."""
         now_utc = datetime.now(UTC)
         current_utc = (
             now_utc.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
         )
-        # If time is between 00:00 and 04:00, set end time to plus 5 hours, else plus 2 hours
-        if 0 <= now_utc.hour < 4:
-            end_time = now_utc + timedelta(hours=5)
-        else:
-            end_time = now_utc + timedelta(hours=2)
-        current_utc_offset = (
-            end_time.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
-        )
-
-        query = f"""query {{
-            station(id: "{self._station_id}") {{
-                hafasID
-                longName
-                journeys(startTime: "{current_utc}", endTime: "{current_utc_offset}", first:50) {{
-                    totalCount
-                    elements {{
-                        ... on Journey {{
-                            line {{
-                                lineGroup {{
-                                    label
-                                }}
-                            }}
-                            loads(onlyHafasID: "{self._station_id}") {{
-                                ratio
-                                loadType
-                            }}
-                            cancelled
-                            stops(onlyHafasID: "{self._station_id}") {{
-                                plannedDeparture {{
-                                    isoString
-                                }}
-                                realtimeDeparture {{
-                                    isoString
-                                }}
-                                destinationLabel
-                                pole {{
-                                    platform {{
-                                        label
-                                    }}
-                                }}
-                            }}
-                        }}
-                    }}
-                }}
-            }}
-        }}"""
 
         try:
-            data = await self.hass.async_add_executor_job(
-                self._client.request_query_response, query, self._at_info
-            )
+            _LOGGER.info("Fetching Motis data for station %s at %s and radius %s", self._station_id, current_utc, self._radius)
+            data = await self._client.departures(self._station_id, current_utc)
         except Exception as err:
             # If the underlying client raised, surface as UpdateFailed so
             # the entity keeps its previous state instead of becoming unknown.
@@ -136,6 +66,18 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # If client returned None (it logged the error), treat as transient
         # update failure so existing state is preserved.
         if data is None:
-            raise UpdateFailed("No data returned from RNV API (transient error)")
+            raise UpdateFailed("No data returned from Motis API (transient error)")
+
+        _LOGGER.debug("Motis data fetched successfully: %s", data)
+        self.station_name = _extract_station_name(data)
 
         return data
+
+def _extract_station_name(data) -> str:
+    """Extract station name from at_info."""
+    try:
+        place = data.get("place", {})
+        station_name = place.get("name", "")
+        return station_name
+    except (KeyError, TypeError):
+        return ""
