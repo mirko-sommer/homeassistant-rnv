@@ -2,13 +2,10 @@
   "config": {
     "step": {
       "user": {
-        "title": "RNV Public Transport",
-        "description": "Enter your tenant ID, client ID, client secret and resource.\nTo use this integration, you need access credentials for the RNV Open Data API.\nRequest acess for 'GraphQL' here:  [RNV API Access Request](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api)",
+        "title": "Motis departures",
+        "description": "Enter your preferred Motis url and station.\nDefault instance is [Transitous](https://transitous.org)",
         "data": {
-          "tenantid": "Tenant ID",
-          "clientid": "Client ID",
-          "clientsecret": "Client Secret",
-          "resource": "Resource"
+          "url": "Url (e.g. https://api.transitous.org/api)"
         }
       }
     },

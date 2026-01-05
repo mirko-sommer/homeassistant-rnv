@@ -27,7 +27,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 prefixes_by_field: dict[str, tuple[str, ...]] = {
-    "url": ("url=",),
+    "url": ("url=",)
 }
 
 
@@ -161,13 +161,13 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         raise InvalidConfig
 
     return {
-        "title": "RNV Public Transport",
+        "title": "Motis Instance (URL: {})".format(data["url"]),
         "url": data["url"],
     }
 
 
 class ConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for RNV Public Transport."""
+    """Handle a config flow for Motis Instance."""
 
     VERSION = 1
 
@@ -306,7 +306,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 "id": user_input["station_id"],
                 "platform": user_input.get("platform", ""),
                 "line": user_input.get("line", ""),
-                "radius": user_input.get("radius", ""),
+                "radius": user_input.get("radius", "0"),
             }
             # Prevent duplicates
             for s in self.stations:
@@ -314,6 +314,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                     s["id"] == new_station["id"]
                     and s.get("platform", "") == new_station["platform"]
                     and s.get("line", "") == new_station["line"]
+                    and s.get("radius", "0") == new_station["radius"]
                 ):
                     errors["base"] = "duplicate_station"
                     break
@@ -328,6 +329,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required("station_id"): str,
                     vol.Optional("platform", default=""): str,
                     vol.Optional("line", default=""): str,
+                    vol.Optional("radius", default="50"): str,
                 }
             ),
             errors=errors,

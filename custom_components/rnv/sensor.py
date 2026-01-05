@@ -198,6 +198,9 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                     "cancelled": cancelled,
                     "platform": platform_label,
                     "time_until_departure": until_display,
+                    "realtime": stop.get("realTime", False),
+                    "route_color": "#" + stop.get("routeColor", "ffffff"),
+                    "route_text_color": "#" + stop.get("routeTextColor", "000000"),
                 }
                 journeys_info.append((dep_time, journey_info))
 
