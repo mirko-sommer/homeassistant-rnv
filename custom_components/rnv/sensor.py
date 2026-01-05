@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 import logging
 from typing import Any
 import re
+from hashlib import sha256
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -129,7 +130,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for the RNV station sensor."""
         return DeviceInfo(
-            identifiers={(self._station_id, self._platform, self._line, self._destinationLabel_filter)},
+            identifiers={(self._station_id, self._platform, self._line, "filter"+sha256(self._destinationLabel_filter.encode('utf-8')).hexdigest()[:8])},
             name=f"RNV Station {self._station_id}{f' {self._platform}' if self._platform else ''}{f' {self._line}' if self._line else ''}{f' {self._destinationLabel_filter}' if self._destinationLabel_filter else ''}",
             manufacturer="Rhein-Neckar-Verkehr GmbH",
             model="Live Departures",
@@ -315,7 +316,8 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         
     def _unique_base_id(self) -> str:
         """Return a unique base ID for derived classes to amend."""
-        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}{f'_filter{str(hash(self._destinationLabel_filter))[:6]}' if self._destinationLabel_filter else ''}"
+        dst_hash ="filter"+sha256(self._destinationLabel_filter.encode('utf-8')).hexdigest()[:8]
+        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}{f'_{dst_hash}' if self._destinationLabel_filter else ''}"
 
 
 class RNVNextDepartureSensor(RNVBaseSensor):
@@ -398,6 +400,32 @@ class RNVNextNextNextDepartureSensor(RNVBaseSensor):
         """Return extra state attributes for the third departure sensor."""
         return self._current_attrs_for_index(2)
 
+class RNVDepartureListSensor(RNVBaseSensor):
+    """Sensor entity for the next RNV departure.
+
+    Tracks and exposes the next upcoming departure for a specific station, platform, and line.
+    """
+
+    @property
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        return "Departure List"
+
+    @property
+    def unique_id(self) -> str:
+        """Return the unique ID for the next departure sensor."""
+        return self._unique_base_id()+"_list"
+        
+    @property
+    def state(self) -> str | None:
+        """Return the ISO formatted departure time for the next upcoming departure."""
+        return self._current_state_for_index(0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra state attributes for the next departure sensor."""
+        return {"departures": [self._current_attrs_for_index(0),self._current_attrs_for_index(1),self._current_attrs_for_index(2),self._current_attrs_for_index(3)]}
+
 
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
     """Set up RNV departure sensors from a config entry.
@@ -433,7 +461,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         station_id = station["id"]
         platform = station.get("platform", "")
         line = station.get("line", "")
-        destinationLabel_filter = station.get("destinationLabel_filter", "") #JD
+        destinationLabel_filter = station.get("destinationLabel_filter", "") 
 
         coordinator = RNVCoordinator(
             hass,
@@ -476,5 +504,17 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 departure_index=2,
             )
         )
+        entities.append(
+            RNVDepartureListSensor(
+                coordinator,
+                station_id,
+                platform,
+                line,
+                destinationLabel_filter,             
+                departure_index=0,
+            )
+        )
+
+
 
     async_add_entities(entities)
