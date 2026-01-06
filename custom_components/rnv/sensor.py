@@ -255,7 +255,7 @@ class RNVNextDepartureSensor(RNVBaseSensor):
     @property
     def unique_id(self) -> str:
         """Return the unique ID for the next departure sensor."""
-        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_next"
+        return f"motis_{self._station_name}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_{self._station_id}_next"
 
     @property
     def state(self) -> str | None:
@@ -282,7 +282,7 @@ class RNVNextNextDepartureSensor(RNVBaseSensor):
     @property
     def unique_id(self) -> str:
         """Return the unique ID for the second departure sensor."""
-        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_second"
+        return f"motis_{self._station_name}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_{self._station_id}_second"
 
     @property
     def state(self) -> str | None:
@@ -309,7 +309,7 @@ class RNVNextNextNextDepartureSensor(RNVBaseSensor):
     @property
     def unique_id(self) -> str:
         """Return the unique ID for the third departure sensor."""
-        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_third"
+        return f"motis_{self._station_name}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}_{self._station_id}_third"
 
     @property
     def state(self) -> str | None:
