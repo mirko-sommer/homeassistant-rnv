@@ -400,33 +400,6 @@ class RNVNextNextNextDepartureSensor(RNVBaseSensor):
         """Return extra state attributes for the third departure sensor."""
         return self._current_attrs_for_index(2)
 
-class RNVDepartureListSensor(RNVBaseSensor):
-    """Sensor entity for the next RNV departure.
-
-    Tracks and exposes the next upcoming departure for a specific station, platform, and line.
-    """
-
-    @property
-    def name(self) -> str:
-        """Return the name of the sensor."""
-        return "Departure List"
-
-    @property
-    def unique_id(self) -> str:
-        """Return the unique ID for the next departure sensor."""
-        return self._unique_base_id()+"_list"
-        
-    @property
-    def state(self) -> str | None:
-        """Return the ISO formatted departure time for the next upcoming departure."""
-        return self._current_state_for_index(0)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return extra state attributes for the next departure sensor."""
-        return {"departures": [self._current_attrs_for_index(0),self._current_attrs_for_index(1),self._current_attrs_for_index(2),self._current_attrs_for_index(3)]}
-
-
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
     """Set up RNV departure sensors from a config entry.
 
@@ -504,17 +477,6 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 departure_index=2,
             )
         )
-        entities.append(
-            RNVDepartureListSensor(
-                coordinator,
-                station_id,
-                platform,
-                line,
-                destinationLabel_filter,             
-                departure_index=0,
-            )
-        )
-
 
 
     async_add_entities(entities)
