@@ -203,7 +203,7 @@ class MotisOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def _remove_devices_for_station(self, station_id):
         device_registry = dr.async_get(self.hass)
-        for device_entry in device_registry.devices.values():
+        for device_entry in list(device_registry.devices.values()):
             if self.config_entry.entry_id in device_entry.config_entries:
                 for identifier in device_entry.identifiers:
                     if identifier[0] == station_id:
