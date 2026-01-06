@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 import logging
-import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -23,13 +22,13 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         hass: HomeAssistant,
         url: str,
-        radius: int,
         at_info: dict[str, Any],
         station_id: str,
         station_name: str,
         platform: str,
         line: str,
-        config_entry,
+        radius: int,
+        config_entry
     ) -> None:
         """Initialize the coordinator."""
         self._client = MotisFunctions(ClientFunctions(url))

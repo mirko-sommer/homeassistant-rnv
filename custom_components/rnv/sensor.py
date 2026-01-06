@@ -56,6 +56,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         station_name: str,
         platform: str,
         line: str,
+        radius: int,
         departure_index: int,
     ) -> None:
         """Initialize the RNVBaseSensor."""
@@ -64,6 +65,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         self._station_name = station_name
         self._platform = platform or ""
         self._line = line or ""
+        self._radius = radius
         self._departure_index = departure_index
         # restored state/attributes populated in async_added_to_hass
         self._restored_state: str | None = None
@@ -128,11 +130,25 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for the RNV station sensor."""
         return DeviceInfo(
-            identifiers={(self._station_id, self._platform, self._line)},
-            name=f"Motis Station {self._station_name} ({self._station_id}{f' {self._platform}' if self._platform else ''}{f' {self._line}' if self._line else ''})",
+            identifiers={(self._station_id, self._platform, self._line, self._radius)},
+            name=self._get_station_name(),
             manufacturer="Motis",
             model="Live Departures",
         )
+
+    def _get_station_name(self) -> str:
+        """Return the station name from coordinator data."""
+        name = f"Motis Station {self._station_name} ({self._station_id})"
+
+        if self.platform and self._platform != "":
+            name += f" – {self._platform}"
+
+        if self._line and self._line != "":
+            name += f" – '{self._line}'"
+
+        name += f" – r:{self._radius}"
+
+        return name
 
     def _extract_journey_data(self) -> list[Any] | None:
         """Extract journey info with only realtime and planned times at given index."""
@@ -334,18 +350,9 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         station_name = station.get("name", "")
         platform = station.get("platform", "")
         line = station.get("line", "")
+        radius = station.get("radius", 50)
 
-        coordinator = RNVCoordinator(
-            hass,
-            url,
-            station.get("radius", 50),
-            at_info,
-            station_id,
-            station_name,
-            platform,
-            line,
-            entry,
-        )
+        coordinator = RNVCoordinator(hass, url, at_info, station_id, station_name, platform, line, radius, entry)
         # Do not await coordinator.async_refresh() here; let it fetch in the background
 
         entities.append(
@@ -355,6 +362,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 station_name,
                 platform,
                 line,
+                radius,
                 departure_index=0,
             )
         )
@@ -365,6 +373,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 station_name,
                 platform,
                 line,
+                radius,
                 departure_index=1,
             )
         )
@@ -375,6 +384,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 station_name,
                 platform,
                 line,
+                radius,
                 departure_index=2,
             )
         )
