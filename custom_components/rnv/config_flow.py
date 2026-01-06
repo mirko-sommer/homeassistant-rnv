@@ -339,15 +339,28 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             selected_index = int(user_input["selected_station"])
             selected_station = self.found_stations[selected_index]
-            return await self.async_step_add_station(
-                {
-                    "station_id": selected_station["id"],
-                    "station_name": selected_station["name"],
-                    "platform": selected_station.get("platform", ""),
-                    "line": selected_station.get("line", ""),
-                    "radius": user_input.get("radius", "50"),
+            errors = {}
+            if user_input is not None:
+                new_station = {
+                    "id": selected_station["id"],
+                    "name": selected_station["name"],
+                    "platform": user_input.get("platform", ""),
+                    "line": user_input.get("line", ""),
+                    "radius": user_input.get("radius", "0"),
                 }
-            )
+                # Prevent duplicates
+                for s in self.stations:
+                    if (
+                            s["id"] == new_station["id"]
+                            and s.get("platform", "") == new_station["platform"]
+                            and s.get("line", "") == new_station["line"]
+                            and s.get("radius", "0") == new_station["radius"]
+                    ):
+                        errors["base"] = "duplicate_station"
+                        break
+                if not errors:
+                    self.stations.append(new_station)
+                    return await self.async_step_menu()
 
         stations_dict = {
             str(idx): f"{s['name']} ({s['id']})"
@@ -365,49 +378,6 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 }
             ),
             errors=errors,
-        )
-
-    async def async_step_add_station(self, user_input=None):
-        """Handle the step to add a new station in the options flow.
-
-        Args:
-            user_input: Optional user input containing station details.
-
-        Returns:
-            The result of the next step in the options flow.
-        """
-        errors = {}
-        if user_input is not None:
-            new_station = {
-                "id": user_input["station_id"],
-                "name": user_input.get("station_name", ""),
-                "platform": user_input.get("platform", ""),
-                "line": user_input.get("line", ""),
-                "radius": user_input.get("radius", "0"),
-            }
-            # Prevent duplicates
-            for s in self.stations:
-                if (
-                    s["id"] == new_station["id"]
-                    and s.get("platform", "") == new_station["platform"]
-                    and s.get("line", "") == new_station["line"]
-                    and s.get("radius", "0") == new_station["radius"]
-                ):
-                    errors["base"] = "duplicate_station"
-                    break
-            if not errors:
-                self.stations.append(new_station)
-                return await self.async_step_menu()
-
-        return await self.async_step_menu(
-            {
-                "station_id": user_input.get("station_id", ""),
-                "station_name": user_input.get("station_name", ""),
-                "platform": user_input.get("platform", ""),
-                "line": user_input.get("line", ""),
-                "radius": user_input.get("radius", "50"),
-            },
-            errors
         )
 
     async def async_step_remove_station(self, user_input=None):
