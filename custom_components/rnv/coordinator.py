@@ -15,7 +15,7 @@ from .data_hub_python_client.MotisFunctions import MotisFunctions
 _LOGGER = logging.getLogger(__name__)
 
 
-class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class MotisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator to fetch Motis departure data."""
 
     def __init__(
