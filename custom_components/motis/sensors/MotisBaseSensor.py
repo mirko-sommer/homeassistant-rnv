@@ -6,7 +6,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 from datetime import UTC, datetime, timedelta
 
-from custom_components.rnv.coordinator import MotisCoordinator
+from custom_components.motis.coordinator import MotisCoordinator
 
 # Time window for valid departures (in minutes)
 Motis_DEPARTURE_VALID_MINUTES = 5

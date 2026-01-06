@@ -1,4 +1,4 @@
-"""Coordinator for RNV departures."""
+"""Coordinator for Motis departures."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ class MotisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             # If the underlying client raised, surface as UpdateFailed so
             # the entity keeps its previous state instead of becoming unknown.
-            raise UpdateFailed(f"Error fetching RNV data: {err}") from err
+            raise UpdateFailed(f"Error fetching Motis data: {err}") from err
 
         # If client returned None (it logged the error), treat as transient
         # update failure so existing state is preserved.

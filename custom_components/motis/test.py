@@ -1,12 +1,10 @@
-from typing import Any
-
-from custom_components.rnv.data_hub_python_client.ClientFunctions import ClientFunctions
-from custom_components.rnv.data_hub_python_client.MotisFunctions import MotisFunctions
+from custom_components.motis.data_hub_python_client.ClientFunctions import ClientFunctions
+from custom_components.motis.data_hub_python_client.MotisFunctions import MotisFunctions
 import asyncio
 
 cf = ClientFunctions("https://api.transitous.org/api")
 mf = MotisFunctions(cf)
-RNV_DEPARTURE_VALID_MINUTES = 5
+MOTIS_DEPARTURE_VALID_MINUTES = 5
 
 async def test_reverse_geocode():
     latitude = 0

@@ -1,4 +1,4 @@
-"""Functions for interacting with the RNV data hub API.
+"""Functions for interacting with the Motis data hub API.
 
 This module provides the ClientFunctions class for requesting access tokens and querying the Data Hub API.
 Based on: https://github.com/Rhein-Neckar-Verkehr/data-hub-python-client
@@ -14,9 +14,11 @@ from ..const import CLIENT_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
+_JSON = "application/json"
+
 
 class ClientFunctions:
-    """Async functions for interacting with the RNV data hub API."""
+    """Async functions for interacting with the Motis data hub API."""
 
     def __init__(self, url: str, session: Optional[aiohttp.ClientSession] = None) -> None:
         self.url = url
@@ -27,7 +29,7 @@ class ClientFunctions:
         full_url = f"{self.url}/{path}"
         headers = {
             "User-Agent": CLIENT_NAME,
-            "Accept": "application/json",
+            "Accept": _JSON,
         }
         timeout = aiohttp.ClientTimeout(total=10)
 
@@ -71,8 +73,8 @@ class ClientFunctions:
         full_url = f"{self.url}/{path}"
         headers = {
             "User-Agent": CLIENT_NAME,
-            "Accept": "application/json",
-            "Content-Type": "application/json",
+            "Accept": _JSON,
+            "Content-Type": _JSON,
         }
         timeout = aiohttp.ClientTimeout(total=10)
 

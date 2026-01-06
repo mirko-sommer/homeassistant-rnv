@@ -1,4 +1,4 @@
-from custom_components.rnv.data_hub_python_client.ClientFunctions import ClientFunctions
+from custom_components.motis.data_hub_python_client.ClientFunctions import ClientFunctions
 
 
 class MotisFunctions:

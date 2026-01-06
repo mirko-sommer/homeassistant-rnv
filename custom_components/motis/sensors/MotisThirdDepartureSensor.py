@@ -1,10 +1,10 @@
 from typing import Any
 
-from custom_components.rnv.sensors.MotisBaseSensor import MotisBaseSensor
+from custom_components.motis.sensors.MotisBaseSensor import MotisBaseSensor
 
 
 class MotisThirdDepartureSensor(MotisBaseSensor):
-    """Sensor entity for the third RNV departure.
+    """Sensor entity for the third Motis departure.
 
     Tracks and exposes the third upcoming departure for a specific station, platform, and line.
     """
