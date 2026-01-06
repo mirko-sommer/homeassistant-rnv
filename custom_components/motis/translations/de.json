@@ -48,8 +48,8 @@
         "description": "Wähle die Haltestelle aus den Suchergebnissen aus, die du hinzufügen möchtest und konfiguriere optional Bahnsteig und Linie.",
         "data": {
           "selected_station": "Haltestellen",
-          "platform": "Steig (optional)",
-          "line": "Linie (optional)",
+          "platform": "Steig (optional – Kommagetrennt für mehrere)",
+          "line": "Linie (optional – Kommagetrennt für mehrere)",
           "radius": "Suchradius (in Metern)"
         }
       },

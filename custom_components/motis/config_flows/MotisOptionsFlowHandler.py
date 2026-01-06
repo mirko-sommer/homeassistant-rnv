@@ -20,9 +20,12 @@ class MotisOptionsFlowHandler(config_entries.OptionsFlow):
         Args:
             config_entry: The configuration entry for the Motis integration.
         """
+        # Save the config entry so other methods can access it
+        self._config_entry = config_entry
+        # Initialize hass from the config entry
+        self.hass = getattr(config_entry, "hass", None)
         self.found_stations = []
         self.stations = list(config_entry.options.get("stations", []))
-        self.hass = None  # wird in async_step_init gesetzt
 
     async def async_step_init(self, user_input=None):
         """Initialize the options flow.
@@ -33,6 +36,7 @@ class MotisOptionsFlowHandler(config_entries.OptionsFlow):
         Returns:
             The result of the next step in the options flow.
         """
+        # ensure hass is available
         self.hass = self.hass or self._config_entry.hass
         return await self.async_step_menu()
 

@@ -69,10 +69,18 @@ class MotisBaseSensor(CoordinatorEntity[MotisCoordinator], RestoreEntity):
         super().__init__(coordinator)
         self._station_id = station_id
         self._station_name = station_name
-        self._platform = platform or ""
-        self._line = line or ""
         self._radius = radius
         self._departure_index = departure_index
+
+        self._platform = platform or ""
+        self._line = line or ""
+        # split line/platform by comma and strip spaces
+        self._line = self._line.strip().split(",")
+        self._platform = self._platform.strip().split(",")
+        # strip spaces from platform/line entries
+        self._line = [l.strip() for l in self._line if l.strip()]
+        self._platform = [p.strip() for p in self._platform if p.strip()]
+
         # restored state/attributes populated in async_added_to_hass
         self._restored_state: str | None = None
         self._restored_attributes: dict[str, Any] | None = None
@@ -140,7 +148,7 @@ class MotisBaseSensor(CoordinatorEntity[MotisCoordinator], RestoreEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for the Motis station sensor."""
         return DeviceInfo(
-            identifiers={(self._station_id, self._platform, self._line, self._radius)},
+            identifiers={(self._station_id, ", ".join(self._platform), ", ".join(self._line), self._radius)},
             name=self._get_station_name(),
             manufacturer="Motis",
             model="Live Departures",
@@ -151,24 +159,39 @@ class MotisBaseSensor(CoordinatorEntity[MotisCoordinator], RestoreEntity):
         name = f"Motis Station {self._station_name} ({self._station_id})"
 
         if self.platform and self._platform != "":
-            name += f" – {self._platform}"
+            name += f" – {", ".join(self._platform)}"
 
         if self._line and self._line != "":
-            name += f" – '{self._line}'"
+            name += f" – '{", ".join(self._line)}'"
 
         name += f" – r:{self._radius}"
 
         return name
 
     def _check_skip_departure(self, dep_str: str, platform_label: str, line: str) -> bool:
-        if self._platform and platform_label != self._platform:
-            return True
-
-        if self._line and line != self._line:
-            return True
+        """Check if a departure should be skipped based on platform/line filters."""
 
         if dep_str == "":
             return True
+
+        platform_hit = False
+        for plat in self._platform:
+            if plat and platform_label == plat:
+                platform_hit = True
+                break
+
+        if self._platform and not platform_hit:
+            return True
+
+        line_hit = False
+        for l in self._line:
+            if l and line == l:
+                line_hit = True
+                break
+
+        if self._line and not line_hit:
+            return True
+
         return False
 
     def _extract_journey_data(self) -> list[Any] | None:

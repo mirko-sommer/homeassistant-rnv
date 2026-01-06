@@ -48,8 +48,8 @@
         "description": "Select the station you want to add from the search results and optionally configure platform and line.",
         "data": {
           "selected_station": "Station",
-          "platform": "Platform (optional)",
-          "line": "Line (optional)",
+          "platform": "Platform (optional – comma separated for multiple)",
+          "line": "Line (optional – comma separated for multiple)",
             "radius": "Search radius (in meters)"
         }
       },
