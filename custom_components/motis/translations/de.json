@@ -47,7 +47,7 @@
         "title": "Haltestelle auswählen",
         "description": "Wähle die Haltestelle aus den Suchergebnissen aus, die du hinzufügen möchtest und konfiguriere optional Bahnsteig und Linie.",
         "data": {
-          "station_id": "Haltestellen-ID (hafasId)",
+          "selected_station": "Haltestellen",
           "platform": "Steig (optional)",
           "line": "Linie (optional)",
           "radius": "Suchradius (in Metern)"

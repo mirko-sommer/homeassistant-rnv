@@ -47,7 +47,7 @@
         "title": "Select a Station",
         "description": "Select the station you want to add from the search results and optionally configure platform and line.",
         "data": {
-          "station_id": "Station ID (hafasId)",
+          "selected_station": "Station",
           "platform": "Platform (optional)",
           "line": "Line (optional)",
             "radius": "Search radius (in meters)"
