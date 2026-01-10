@@ -221,7 +221,7 @@ This automation integrates the next tram departure towards **Heidelberg/Bismarck
 
 The appropriate icon is assigned automatically (ID `72319` for Line 21, ID `72318` for Line 5 can be found here: https://developer.lametric.com/icons). Note that you need to download the icons in awtrix first before this is working. If no matching tram is scheduled, the app is automatically hidden from the loop.
 
-<img src="images/awtrix_example" alt="RNV Awtrix" width="300"/>
+<img src="images/awtrix_example.gif" alt="RNV Awtrix" width="300"/>
 
 ```
 alias: "Awtrix: RNV Monitor"
