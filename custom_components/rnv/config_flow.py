@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any
+import re
 
 import voluptuous as vol
 
@@ -373,6 +374,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 "id": user_input["station_id"],
                 "platform": user_input.get("platform", ""),
                 "line": user_input.get("line", ""),
+                "destinationLabel_filter": user_input.get("destinationLabel_filter", ""),
             }
             # Prevent duplicates
             for s in self.stations:
@@ -380,9 +382,17 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                     s["id"] == new_station["id"]
                     and s.get("platform", "") == new_station["platform"]
                     and s.get("line", "") == new_station["line"]
+                    and s.get("destinationLabel_filter", "") == new_station["destinationLabel_filter"]
                 ):
                     errors["base"] = "duplicate_station"
                     break
+
+            # Check if regex is compilable, so we don't crash later.     
+            try:
+                re.compile(new_station["destinationLabel_filter"])
+            except:
+                errors["base"]="destinationLabel_filter_no_valid_regex"
+                
             if not errors:
                 self.stations.append(new_station)
                 return await self.async_step_menu()
@@ -394,6 +404,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required("station_id"): str,
                     vol.Optional("platform", default=""): str,
                     vol.Optional("line", default=""): str,
+                    vol.Optional("destinationLabel_filter", default=""): str,
                 }
             ),
             errors=errors,
@@ -412,8 +423,8 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_menu()
 
         stations_dict = {
-            str(idx): f"{s['id']} ({', '.join([v for v in (s.get('platform'), s.get('line')) if v])})"
-            if s.get("platform") or s.get("line")
+            str(idx): f"{s['id']} ({', '.join([v for v in (s.get('platform'), s.get('line'), s.get('destinationLabel_filter')) if v])})"
+            if s.get("platform") or s.get("line") or s.get("destinationLabel_filter")
             else f"{s['id']}"
             for idx, s in enumerate(self.stations)
         }
