@@ -184,6 +184,111 @@ content: |
 
 ```
 
+### Awtrix: RNV Monitor (with timebased and direction based Filter)
+
+This automation integrates the next tram departure towards **Heidelberg/Bismarckplatz** as an app into the Awtrix loop. The display logic dynamically filters based on the time of day:
+
+* **Before 8:00 AM:** Only **Line 21** is displayed.
+* **From 8:00 AM:** Both **Line 5 and Line 21** are considered (showing whichever arrives first).
+
+The appropriate icon is assigned automatically (ID `72319` for Line 21, ID `72318` for Line 5 can be found here: https://developer.lametric.com/icons). Note that you need to download the icons in awtrix first before this is working. If no matching tram is scheduled, the app is automatically hidden from the loop.
+
+<img src="images/awtrix_example.gif" alt="RNV Awtrix" width="300"/>
+
+```
+alias: "Awtrix: RNV Monitor"
+description: "Shows next tram. Before 8 AM only Line 21, from 8 AM also Line 5."
+mode: restart
+triggers:
+  # 1. Update on schedule change
+  - trigger: state
+    entity_id:
+      - sensor.rnv_station_515_next_departure
+      - sensor.rnv_station_515_second_departure
+      - sensor.rnv_station_515_third_departure
+  # 2. Update every minute (keeps 'min' display current and toggles logic at 8:00)
+  - trigger: time_pattern
+    minutes: "/1"
+
+actions:
+  - action: mqtt.publish
+    data:
+      topic: awtrix/custom/rnv
+      retain: true
+      payload: >-
+        {# --- CONFIGURATION --- #}
+        {% set candidates = [
+          states.sensor.rnv_station_515_next_departure,
+          states.sensor.rnv_station_515_second_departure,
+          states.sensor.rnv_station_515_third_departure
+        ] %}
+        
+        {# Current hour for logic #}
+        {% set current_hour = now().hour %}
+        
+        {% set ns = namespace(found=false, time='?', icon='') %}
+        
+        {# --- SEARCH LOOP --- #}
+        {% for tram in candidates %}
+          {# Only continue if nothing found yet and sensor is valid #}
+          {% if not ns.found and tram is defined and tram.state != 'unavailable' %}
+            
+            {% set line = tram.attributes.label | string %}
+            {% set dest = tram.attributes.destination | default('', true) %}
+            
+            {# 1. DIRECTION CHECK (Always valid) #}
+            {% if 'Heidelberg' in dest or 'Bismarckplatz' in dest %}
+              
+              {# 2. LINE CHECK (Dependent on time) #}
+              {% set line_match = false %}
+              
+              {# Before 8 AM: Only Line 21 #}
+              {% if current_hour < 8 %}
+                {% if line == '21' %}
+                  {% set line_match = true %}
+                {% endif %}
+              
+              {# From 8 AM: Line 21 OR Line 5 #}
+              {% else %}
+                {% if line == '21' or line == '5' %}
+                  {% set line_match = true %}
+                {% endif %}
+              {% endif %}
+              
+              {# 3. PROCESS MATCH #}
+              {% if line_match %}
+                {% set ns.found = true %}
+                {% set ns.time = tram.attributes.time_until_departure %}
+                
+                {# Icon Assignment #}
+                {% if line == '5' %}
+                  {% set ns.icon = '72318' %}
+                {% elif line == '21' %}
+                   {% set ns.icon = '72319' %}
+                {% else %}
+                   {% set ns.icon = '5347' %} {# Fallback, should not happen #}
+                {% endif %}
+                
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        
+        {# --- OUTPUT --- #}
+        {% if ns.found %}
+          {
+            "text": "{{ ns.time }}", 
+            "icon": "{{ ns.icon }}",
+            "color": [255, 165, 0],
+            "pushIcon": 0,
+            "duration": 15
+          }
+        {% else %}
+          {# No matching tram found (or wrong direction/line) -> Hide #}
+          ""
+        {% endif %}
+```
+
 ## License
 
 This project is licensed under the [MIT License](./LICENSE),  
