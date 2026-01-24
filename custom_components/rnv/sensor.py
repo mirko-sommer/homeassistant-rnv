@@ -129,8 +129,14 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information for the RNV station sensor."""
+        # Keep backwards compatibility: only include filter hash when filter is present
+        if self._destinationLabel_filter:
+            identifiers = {(self._station_id, self._platform, self._line, "filter"+sha256(self._destinationLabel_filter.encode('utf-8')).hexdigest()[:8])}
+        else:
+            identifiers = {(self._station_id, self._platform, self._line)}
+            
         return DeviceInfo(
-            identifiers={(self._station_id, self._platform, self._line, "filter"+sha256(self._destinationLabel_filter.encode('utf-8')).hexdigest()[:8])},
+            identifiers=identifiers,
             name=f"RNV Station {self._station_id}{f' {self._platform}' if self._platform else ''}{f' {self._line}' if self._line else ''}{f' {self._destinationLabel_filter}' if self._destinationLabel_filter else ''}",
             manufacturer="Rhein-Neckar-Verkehr GmbH",
             model="Live Departures",
