@@ -38,7 +38,7 @@
           "station_id": "Haltestellen-ID (hafasId)",
           "platform": "Steig (optional)",
           "line": "Linie (optional)",          
-          "destinationLabel_filter": "Endstationsfilter (optional, siehe Dokumentation)"
+          "destination_label_filter": "Endstationsfilter (optional, siehe Dokumentation)"
         }
       },
       "remove_station": {
@@ -51,7 +51,7 @@
     },
     "error": {
       "duplicate_station": "Diese Haltestelle-Steig-Linien Kombination ist bereits konfiguriert.",
-      "destinationLabel_filter_no_valid_regex": "Endstationsfilter ist ungültig, bitte einen gültigen regulären Ausdruck benutzen."
+      "destination_label_filter_no_valid_regex": "Endstationsfilter ist ungültig, bitte einen gültigen regulären Ausdruck benutzen."
     }
   }
 }

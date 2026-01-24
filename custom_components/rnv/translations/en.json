@@ -38,7 +38,7 @@
           "station_id": "Station ID (hafasId)",
           "platform": "Platform (optional)",
           "line": "Line (optional)",
-          "destinationLabel_filter": "Destination filter (regexp, optional)"
+          "destination_label_filter": "Destination filter (regexp, optional)"
         }
       },
       "remove_station": {
@@ -51,7 +51,7 @@
     },
     "error": {
       "duplicate_station": "This station-platform-line combination is already configured.",
-      "destinationLabel_filter_no_valid_regex": "Destination filter invalid, please provide a valid regular expression."
+      "destination_label_filter_no_valid_regex": "Destination filter invalid, please provide a valid regular expression."
     }
   }
 }
