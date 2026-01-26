@@ -81,7 +81,12 @@ The station ID (hafasId) can be found in a json file [here](https://www.opendata
 | `destination_filter` | string | Optional parameter to filter destinations | No | (empty, filtering nothing) |
 
 ##### **Destination Filter:**  
-The destination filter needs to be a regular expression, in the simplest case just the name of the destination. This can be `Bismarckplatz` for example. You can choose more complex rules such as filtering out destinations `^((?!Bismarckplatz).)*$`, which might be beneficial depending on your needs.  
+The destination filter needs to be a regular expression, in the simplest case just the name of the destination. This can be `Bismarckplatz` for example. You can choose more complex rules such as filtering out destinations `^((?!Bismarckplatz).)*$`, which might be beneficial depending on your needs.
+
+##### **Tram Vehicle Info:**
+The vehicle info is provided based on this website and the vehicle ID provided by the RNV API: [https://www.tram-info.de/wagenp/rnv_a.php](https://www.tram-info.de/wagenp/rnv_a.php)
+
+Currently additional information about the vehicle are only available for trams.
 
 #### **Remove a station:**  
 Select a station from your saved list to remove it (this also deletes associated devices).
