@@ -118,6 +118,7 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                     }}
                                 }}
                             }}
+                            vehicles
                         }}
                     }}
                 }}

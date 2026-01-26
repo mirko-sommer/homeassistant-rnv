@@ -9,6 +9,10 @@ import logging
 from typing import Any
 import re
 from hashlib import sha256
+import asyncio
+
+import requests
+from bs4 import BeautifulSoup
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -23,6 +27,13 @@ _LOGGER = logging.getLogger(__name__)
 
 # Time window for valid departures (in minutes)
 RNV_DEPARTURE_VALID_MINUTES = 5
+# Vehicle info cache expiration (in hours)
+VEHICLE_INFO_CACHE_HOURS = 24
+
+# Global shared vehicle table cache
+_GLOBAL_VEHICLE_CACHE: dict[str, dict[str, Any]] = {}
+_GLOBAL_VEHICLE_CACHE_LAST_FETCHED: datetime | None = None
+_GLOBAL_VEHICLE_CACHE_LOCK = asyncio.Lock()
 
 
 class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
@@ -142,6 +153,23 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
             model="Live Departures",
         )
         
+    @staticmethod
+    def _is_vehicle_table_expired() -> bool:
+        """Check if global vehicle table cache is expired.
+        
+        Returns:
+            True if cache is expired or doesn't exist
+        """
+        global _GLOBAL_VEHICLE_CACHE_LAST_FETCHED
+        
+        if not _GLOBAL_VEHICLE_CACHE_LAST_FETCHED:
+            return True
+            
+        now = datetime.now(UTC)
+        expiry_time = _GLOBAL_VEHICLE_CACHE_LAST_FETCHED + timedelta(hours=VEHICLE_INFO_CACHE_HOURS)
+        
+        return now > expiry_time
+
     def _get_desired_stops(self, journey: dict) -> dict:
         """Return journey filtered to only non-invalid anddesired stops"""
 
@@ -292,6 +320,15 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                                 "sofort" if language.startswith("de") else "now"
                             )
 
+                    vehicle_number = journey.get("vehicles", [None])[0] if journey.get("vehicles") else None
+                    
+                    # Trigger table fetch if expired
+                    if RNVBaseSensor._is_vehicle_table_expired():
+                        self.hass.async_create_task(self._update_vehicle_table_cache())
+
+                    # Get vehicle info from cached table
+                    vehicle_info = RNVBaseSensor._get_vehicle_info(vehicle_number)
+                    
                     journey_info = {
                         "planned_time": stop.get("plannedDeparture", {}).get(
                             "isoString"
@@ -311,6 +348,8 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                         else None,
                         "load_type": capacity_levels.get(load_type_raw),
                         "time_until_departure": until_display,
+                        "vehicle": vehicle_number,
+                        "vehicle_info": vehicle_info,
                     }
                     journeys_info.append((dep_time, journey_info))
 
@@ -320,6 +359,97 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
             return journeys_info[index][1]
         return None
         
+    @staticmethod
+    def _get_vehicle_info(vehicle_number: str) -> dict[str, Any] | None:
+        """Get vehicle information from cached table.
+        
+        Args:
+            vehicle_number: The wagon/vehicle number to look up
+            
+        Returns:
+            Dict with vehicle information or None if not found
+        """
+        global _GLOBAL_VEHICLE_CACHE
+        
+        if not vehicle_number:
+            return None
+        
+        return _GLOBAL_VEHICLE_CACHE.get(vehicle_number)
+    
+    @staticmethod
+    def _fetch_vehicle_table_sync() -> dict[str, dict[str, Any]]:
+        """Synchronously fetch entire vehicle table from tram-info.de.
+        
+        This method is designed to run in an executor thread pool.
+        
+        Returns:
+            Dict mapping vehicle numbers to their info, or empty dict on error
+        """
+        try:
+            url = "https://www.tram-info.de/wagenp/rnv_a.php"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+            }
+            resp = requests.get(url, headers=headers, timeout=30)
+            resp.raise_for_status()
+            
+            soup = BeautifulSoup(resp.text, "html.parser")
+            
+            vehicle_table = {}
+            rows_processed = 0
+            
+            for row in soup.find_all("tr"):
+                cells = row.find_all("td")
+                if len(cells) < 8:
+                    continue
+                    
+                values = [c.get_text(strip=True) for c in cells]
+                
+                vehicle_table[values[0]] = {
+                    "type": values[2],
+                    "design": values[3],
+                    "year_built": values[4],
+                    "manufacturer": values[5],
+                    "paint_scheme": values[6],
+                    "advertising": values[7],
+                }
+                rows_processed += 1
+                    
+            return vehicle_table
+            
+        except Exception as e:
+            _LOGGER.warning("Failed to fetch vehicle table: %s", e)
+            return {}
+            
+    async def _update_vehicle_table_cache(self) -> None:
+        """Update the shared vehicle table cache."""
+        global _GLOBAL_VEHICLE_CACHE, _GLOBAL_VEHICLE_CACHE_LAST_FETCHED, _GLOBAL_VEHICLE_CACHE_LOCK
+        
+        # Use lock to prevent multiple simultaneous requests
+        async with _GLOBAL_VEHICLE_CACHE_LOCK:
+            if not RNVBaseSensor._is_vehicle_table_expired():
+                return
+
+            try:
+                # Use executor to run the blocking HTTP request in a thread pool
+                vehicle_table = await self.hass.async_add_executor_job(
+                    RNVBaseSensor._fetch_vehicle_table_sync
+                )
+                
+                if vehicle_table:
+                    _GLOBAL_VEHICLE_CACHE = vehicle_table
+                    _GLOBAL_VEHICLE_CACHE_LAST_FETCHED = datetime.now(UTC)
+                else:
+                    _LOGGER.debug("Failed to fetch vehicle table")
+                    
+            except Exception as e:
+                _LOGGER.debug("Failed to update vehicle table cache: %s", e)
+    
     def _unique_base_id(self) -> str:
         """Return a unique base ID for derived classes to amend."""
         dst_hash ="filter"+sha256(self._destination_label_filter.encode('utf-8')).hexdigest()[:8]
