@@ -113,7 +113,7 @@ Use this code to replicate the card in Home Assistant. You only have to change t
 ```yaml
 type: markdown
 content: |
-  <h3>🚏 Departures</h1>
+  <h3>🚏 Departures</h3>
 
   {% set sensors = [
     'sensor.rnv_station_XXXX_next_departure',
@@ -133,18 +133,27 @@ content: |
       {%- set state = states[s] %}
       {%- if state %}
         <tr>
-          <td align="center">{{ state.attributes.label }}</td>
-          <td align="center">{{ state.attributes.destination }}</td>
+          <td align="center">{{ state.attributes.label | default('-') }}</td>
           <td align="center">
-            {%- if state.attributes.time_until_departure -%}
-            {{ state.attributes.time_until_departure }}
-            {%- else -%}
-            {{ state.attributes.realtime_time_local or (state.attributes.realtime_time | default(state.attributes.planned_time) | as_timestamp | timestamp_custom('%H:%M')) }}
-            {%- endif -%}
-
+            {%- set dest = state.attributes.destination | default(None) %}
+            {{ (dest[:12] ~ ("…" if dest|length > 15 else "")) if dest else '-' }}
           </td>
-          <td align="center">{{ state.attributes.platform or '-' }}</td>
-          <td align="center">{{ state.attributes.load_ratio or '-' }}</td>
+          <td align="center">
+            {%- set t_depart = state.attributes.time_until_departure | default(None) %}
+            {%- if t_depart %}
+              {{ t_depart }}
+            {%- else %}
+              {%- set t_local = state.attributes.realtime_time_local | default(None) %}
+              {%- set t_remote = state.attributes.realtime_time | default(state.attributes.planned_time) %}
+              {{ (t_local or (t_remote | as_timestamp | timestamp_custom('%H:%M'))) if (t_local or t_remote) else '-' }}
+            {%- endif %}
+          </td>
+          <td align="center">{{ state.attributes.platform | default('-') }}</td>
+          <td align="center">{{ state.attributes.load_ratio | default('-') }}</td>
+        </tr>
+      {%- else %}
+        <tr>
+          <td colspan="5" align="center">No data available</td>
         </tr>
       {%- endif %}
     {%- endfor %}
