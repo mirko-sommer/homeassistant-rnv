@@ -97,16 +97,20 @@ Apply your changes and close the options menu.
 ## Examples
 Below are two examples showing upcoming RNV public transport departures in Home Assistant:
 
-<img src="images/example_departures.png" alt="RNV Logo" width="200"/>
-<img src="images/example_betriebshof.png" alt="RNV Logo" width="250"/>
+<img src="images/example_departures.png" alt="Example Departures" width="200"/> <img src="images/example_betriebshof.png" alt="Example Sensor Betriebshof" width="250"/>
 
-## Example Frontend Card
+## Example Usages
+### Example Frontend Card
 Using the markdown card in Home Assistant an overview like this can be generated:
 
-<img src="images/markdown.png" alt="RNV Logo" width="300"/>
+<img src="images/markdown.png" alt="Frontend Markdown Card" width="300"/>
 
 Use this code to replicate the card in Home Assistant. You only have to change the heading and your RNV sensor names:
-```
+
+<details>
+<summary>Click here to see the markdown card code</summary>
+
+```yaml
 type: markdown
 content: |
   <h3>🚏 Departures</h1>
@@ -147,51 +151,7 @@ content: |
   </table>
 ```
 
-For a German Version:
-
-<img src="images/markdown_german.png" alt="RNV Logo" width="300"/>
-
-```
-type: markdown
-content: |
-  <h3>🚏 Haltestelle</h1>
-
-  {% set sensors = [
-    'sensor.rnv_station_XXXX_next_departure',
-    'sensor.rnv_station_XXXX_second_departure',
-    'sensor.rnv_station_XXXX_third_departure'
-  ] %}
-
-  <table border="1" width="100%" cellspacing="0" cellpadding="4">
-    <tr>
-      <th align="center">Linie</th>
-      <th align="center">Ziel</th>
-      <th align="center">Abfahrt</th>
-      <th align="center">Steig</th>
-      <th align="center">Belegt</th>
-    </tr>
-    {%- for s in sensors %}
-      {%- set state = states[s] %}
-      {%- if state %}
-        <tr>
-          <td align="center">{{ state.attributes.label }}</td>
-          <td align="center">{{ state.attributes.destination }}</td>
-          <td align="center">
-            {%- if state.attributes.time_until_departure -%}
-            {{ state.attributes.time_until_departure }}
-            {%- else -%}
-            {{ state.attributes.realtime_time_local or (state.attributes.realtime_time | default(state.attributes.planned_time) | as_timestamp | timestamp_custom('%H:%M')) }}
-            {%- endif -%}
-
-          </td>
-          <td align="center">{{ state.attributes.platform or '-' }}</td>
-          <td align="center">{{ state.attributes.load_ratio or '-' }}</td>
-        </tr>
-      {%- endif %}
-    {%- endfor %}
-  </table>
-
-```
+</details>
 
 ### Awtrix: RNV Monitor (with timebased and direction based Filter)
 
@@ -202,9 +162,10 @@ This automation integrates the next tram departure towards **Heidelberg/Bismarck
 
 The appropriate icon is assigned automatically (ID `72319` for Line 21, ID `72318` for Line 5 can be found here: https://developer.lametric.com/icons). Note that you need to download the icons in awtrix first before this is working. If no matching tram is scheduled, the app is automatically hidden from the loop.
 
-<img src="images/awtrix_example.gif" alt="RNV Awtrix" width="300"/>
+<details>
+<summary>Click here to see the Awtrix automation code</summary>
 
-```
+```yaml
 alias: "Awtrix: RNV Monitor"
 description: "Shows next tram. Before 8 AM only Line 21, from 8 AM also Line 5."
 mode: restart
@@ -297,6 +258,10 @@ actions:
           ""
         {% endif %}
 ```
+
+</details>
+
+<img src="images/awtrix_example.gif" alt="RNV Awtrix" width="300"/>
 
 ## License
 
