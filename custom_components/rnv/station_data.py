@@ -9,27 +9,27 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class StationDataHelper:
-    """Helper class for accessing station data from stops.json."""
+    """Helper class for accessing station data from stations.json."""
 
     _data_cache: dict[str, Any] | None = None
     _cache_file_path: str | None = None
 
     @classmethod
     def _get_stops_file_path(cls) -> str:
-        """Get the path to the stops.json file.
+        """Get the path to the stations.json file.
         
         Returns:
-            Absolute path to stops.json
+            Absolute path to stations.json
         """
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(current_dir, "data", "stops.json")
+        return os.path.join(current_dir, "data", "stations.json")
 
     @classmethod
     def _load_data(cls) -> dict[str, Any]:
-        """Load station data from stops.json with caching.
+        """Load station data from stations.json with caching.
         
         Returns:
-            Parsed JSON data from stops.json
+            Parsed JSON data from stations.json
             
         Raises:
             Exception: If file cannot be read or parsed

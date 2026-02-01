@@ -144,7 +144,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information for the RNV station sensor."""
-        # Get station name from stops.json
+        # Get station name from stations.json
         
         # Keep backwards compatibility: only include filter hash when filter is present
         if self._destination_label_filter:
