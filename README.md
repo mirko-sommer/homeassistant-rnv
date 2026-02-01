@@ -75,7 +75,7 @@ The station ID (hafasId) can be found in a json file [here](https://www.opendata
 
 | Field        | Type   | Description                                      | Required | Default |
 |--------------|--------|-------------------------------------------------|----------|---------|
-| `station_id` | string | The unique identifier of the station (hafasID from json file, e.g. "1144" for "Betriebshof"). | Yes      | —       |
+| `station_id` | | Dropdown to select the station (e.g. "Abendakademie (ID: 2447)"). | Yes      | —       |
 | `platform`   | string | Optional platform number (e.g. "A", "B", ...). | No       | (empty) |
 | `line`       | string | Optional specific line to monitor at the station (e.g. "33", "24", ...). | No       | (empty) |
 | `destination_filter` | string | Optional parameter to filter destinations | No | (empty, filtering nothing) |
