@@ -361,6 +361,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                         .get("lineGroup", {})
                         .get("label"),
                         "destination": stop.get("destinationLabel"),
+                        "destination_filter": self._destination_label_filter if self._destination_label_filter else None,
                         "planned_time": stop.get("plannedDeparture", {}).get(
                             "isoString"
                         ),
