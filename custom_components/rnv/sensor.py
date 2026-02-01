@@ -10,6 +10,8 @@ from typing import Any
 import re
 from hashlib import sha256
 import asyncio
+import json
+import os
 
 import requests
 from bs4 import BeautifulSoup
@@ -27,14 +29,15 @@ from .station_data import StationDataHelper
 _LOGGER = logging.getLogger(__name__)
 
 # Time window for valid departures (in minutes)
-RNV_DEPARTURE_VALID_MINUTES = 5
+RNV_DEPARTURE_VALID_MINUTES = 10
 # Vehicle info cache expiration (in hours)
 VEHICLE_INFO_CACHE_HOURS = 24
 
-# Global shared vehicle table cache
-_GLOBAL_VEHICLE_CACHE: dict[str, dict[str, Any]] = {}
-_GLOBAL_VEHICLE_CACHE_LAST_FETCHED: datetime | None = None
+# Global lock for vehicle table cache file operations
 _GLOBAL_VEHICLE_CACHE_LOCK = asyncio.Lock()
+
+# Vehicle cache file path (relative to component directory)
+VEHICLE_CACHE_FILE = "data/vehicles.json"
 
 
 class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
@@ -177,20 +180,24 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         
     @staticmethod
     def _is_vehicle_table_expired() -> bool:
-        """Check if global vehicle table cache is expired.
+        """Check if vehicle table cache file is expired.
         
         Returns:
             True if cache is expired or doesn't exist
         """
-        global _GLOBAL_VEHICLE_CACHE_LAST_FETCHED
+        cache_path = os.path.join(os.path.dirname(__file__), VEHICLE_CACHE_FILE)
         
-        if not _GLOBAL_VEHICLE_CACHE_LAST_FETCHED:
+        if not os.path.exists(cache_path):
             return True
-            
-        now = datetime.now(UTC)
-        expiry_time = _GLOBAL_VEHICLE_CACHE_LAST_FETCHED + timedelta(hours=VEHICLE_INFO_CACHE_HOURS)
         
-        return now > expiry_time
+        try:
+            file_mtime = os.path.getmtime(cache_path)
+            file_time = datetime.fromtimestamp(file_mtime, tz=UTC)
+            now = datetime.now(UTC)
+            expiry_time = file_time + timedelta(hours=VEHICLE_INFO_CACHE_HOURS)
+            return now > expiry_time
+        except (OSError, ValueError):
+            return True
 
     def _get_desired_stops(self, journey: dict) -> dict:
         """Return journey filtered to only non-invalid anddesired stops"""
@@ -360,8 +367,8 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                         "label": journey.get("line", {})
                         .get("lineGroup", {})
                         .get("label"),
-                        "destination": stop.get("destinationLabel"),
                         "destination_filter": self._destination_label_filter if self._destination_label_filter else None,
+                        "destination": stop.get("destinationLabel"),
                         "planned_time": stop.get("plannedDeparture", {}).get(
                             "isoString"
                         ),
@@ -388,7 +395,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         
     @staticmethod
     def _get_vehicle_info(vehicle_number: str) -> dict[str, Any] | None:
-        """Get vehicle information from cached table.
+        """Get vehicle information from cached table file.
         
         Args:
             vehicle_number: The wagon/vehicle number to look up
@@ -396,12 +403,20 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         Returns:
             Dict with vehicle information or None if not found
         """
-        global _GLOBAL_VEHICLE_CACHE
-        
         if not vehicle_number:
             return None
         
-        return _GLOBAL_VEHICLE_CACHE.get(vehicle_number)
+        cache_path = os.path.join(os.path.dirname(__file__), VEHICLE_CACHE_FILE)
+        
+        try:
+            if os.path.exists(cache_path):
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    vehicle_cache = json.load(f)
+                    return vehicle_cache.get(vehicle_number)
+        except (OSError, json.JSONDecodeError) as e:
+            _LOGGER.debug("Failed to read vehicle cache: %s", e)
+        
+        return None
     
     @staticmethod
     def _fetch_vehicle_table_sync() -> dict[str, dict[str, Any]]:
@@ -454,8 +469,8 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
             return {}
             
     async def _update_vehicle_table_cache(self) -> None:
-        """Update the shared vehicle table cache."""
-        global _GLOBAL_VEHICLE_CACHE, _GLOBAL_VEHICLE_CACHE_LAST_FETCHED, _GLOBAL_VEHICLE_CACHE_LOCK
+        """Update the shared vehicle table cache file."""
+        global _GLOBAL_VEHICLE_CACHE_LOCK
         
         # Use lock to prevent multiple simultaneous requests
         async with _GLOBAL_VEHICLE_CACHE_LOCK:
@@ -469,8 +484,15 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                 )
                 
                 if vehicle_table:
-                    _GLOBAL_VEHICLE_CACHE = vehicle_table
-                    _GLOBAL_VEHICLE_CACHE_LAST_FETCHED = datetime.now(UTC)
+                    cache_path = os.path.join(os.path.dirname(__file__), VEHICLE_CACHE_FILE)
+                    # Ensure data directory exists
+                    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                    
+                    # Write cache to file
+                    with open(cache_path, "w", encoding="utf-8") as f:
+                        json.dump(vehicle_table, f, ensure_ascii=False, indent=2)
+                    
+                    _LOGGER.debug("Vehicle table cache updated with %d entries", len(vehicle_table))
                 else:
                     _LOGGER.debug("Failed to fetch vehicle table")
                     
