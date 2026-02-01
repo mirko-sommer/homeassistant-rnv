@@ -33,12 +33,12 @@
       },
       "add_station": {
         "title": "Add a Station",
-        "description": "Provide the details of the station you want to add.\nThe station ID (hafasId) can be found in a json file [here](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/datensaetze?id=1405&tx_vrrkit_view[dataset_name]=haltestellendaten-rnv&tx_vrrkit_view[action]=details&tx_vrrkit_view[controller]=View).",
+        "description": "Select a station from the dropdown.\nOptionally filter by platform and line.",
         "data": {
-          "station_id": "Station ID (hafasId)",
+          "station_selection": "Select Station",
           "platform": "Platform (optional)",
           "line": "Line (optional)",
-          "destination_label_filter": "Destination filter (regexp, optional)"
+          "destination_label_filter": "Destination Filter (regex, optional)"
         }
       },
       "remove_station": {
@@ -51,7 +51,8 @@
     },
     "error": {
       "duplicate_station": "This station-platform-line combination is already configured.",
-      "destination_label_filter_no_valid_regex": "Destination filter invalid, please provide a valid regular expression."
+      "no_station_selected": "Please select a station from the dropdown.",
+      "destination_label_filter_no_valid_regex": "The destination filter is not a valid regular expression."
     }
   }
 }

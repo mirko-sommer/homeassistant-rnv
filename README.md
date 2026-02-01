@@ -272,6 +272,12 @@ actions:
 
 <img src="images/awtrix_example.gif" alt="RNV Awtrix" width="300"/>
 
+## Data Attribution
+
+This integration includes station data ([stops.json](./custom_components/rnv/data/stops.json)) provided by **Rhein-Neckar-Verkehr GmbH (RNV)** under the [Data licence Germany – attribution – Version 2.0 (dl-de/by-2-0)](http://www.govdata.de/dl-de/by-2-0).
+
+**Source dataset:** [RNV Station Data (haltestellendaten-rnv)](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/datensaetze?id=1405&tx_vrrkit_view[dataset_name]=haltestellendaten-rnv&tx_vrrkit_view[action]=details&tx_vrrkit_view[controller]=View)
+
 ## License
 
 This project is licensed under the [MIT License](./LICENSE),  

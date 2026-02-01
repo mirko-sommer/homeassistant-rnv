@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import time
 from typing import Any
 import re
@@ -17,6 +19,7 @@ from homeassistant.helpers import device_registry as dr
 
 from .const import CLIENT_API_URL, DOMAIN, OAUTH_URL_TEMPLATE
 from .data_hub_python_client.ClientFunctions import ClientFunctions
+from .station_data import StationDataHelper
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -369,43 +372,54 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
             The result of the next step in the options flow.
         """
         errors = {}
+        
+        # Load station data for dropdown
+        available_stations = StationDataHelper.load_station_data()
+        
         if user_input is not None:
-            new_station = {
-                "id": user_input["station_id"],
-                "platform": user_input.get("platform", ""),
-                "line": user_input.get("line", ""),
-                "destination_label_filter": user_input.get("destination_label_filter", ""),
-            }
-            # Prevent duplicates
-            for s in self.stations:
-                if (
-                    s["id"] == new_station["id"]
-                    and s.get("platform", "") == new_station["platform"]
-                    and s.get("line", "") == new_station["line"]
-                    and s.get("destination_label_filter", "") == new_station["destination_label_filter"]
-                ):
-                    errors["base"] = "duplicate_station"
-                    break
-
-            # Check if regex is compilable, so we don't crash later.     
-            try:
-                re.compile(new_station["destination_label_filter"])
-            except:
-                errors["base"]="destination_label_filter_no_valid_regex"
+            # Get station ID from dropdown selection
+            station_id = user_input.get("station_selection", "")
+            
+            if not station_id:
+                errors["base"] = "no_station_selected"
+            else:
+                new_station = {
+                    "id": station_id,
+                    "platform": user_input.get("platform", ""),
+                    "line": user_input.get("line", ""),
+                    "destination_label_filter": user_input.get("destination_label_filter", ""),
+                }
                 
-            if not errors:
-                self.stations.append(new_station)
-                return await self.async_step_menu()
+                # Prevent duplicates
+                for s in self.stations:
+                    if (
+                        s["id"] == new_station["id"]
+                        and s.get("platform", "") == new_station["platform"]
+                        and s.get("line", "") == new_station["line"]
+                        and s.get("destination_label_filter", "") == new_station["destination_label_filter"]
+                    ):
+                        errors["base"] = "duplicate_station"
+                        break
+
+                # Check if regex is compilable, so we don't crash later.     
+                try:
+                    re.compile(new_station["destination_label_filter"])
+                except:
+                    errors["base"] = "destination_label_filter_no_valid_regex"
+                    
+                if not errors:
+                    self.stations.append(new_station)
+                    return await self.async_step_menu()
 
         return self.async_show_form(
             step_id="add_station",
             data_schema=vol.Schema(
                 {
-                    vol.Required("station_id"): str,
+                    vol.Required("station_selection"): vol.In(available_stations),
                     vol.Optional("platform", default=""): str,
                     vol.Optional("line", default=""): str,
                     vol.Optional("destination_label_filter", default=""): str,
-                }
+            }
             ),
             errors=errors,
         )
@@ -422,12 +436,17 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
         if not self.stations:
             return await self.async_step_menu()
 
-        stations_dict = {
-            str(idx): f"{s['id']} ({', '.join([v for v in (s.get('platform'), s.get('line'), s.get('destination_label_filter')) if v])})"
-            if s.get("platform") or s.get("line") or s.get("destination_label_filter")
-            else f"{s['id']}"
-            for idx, s in enumerate(self.stations)
-        }
+        stations_dict = {}
+        for idx, s in enumerate(self.stations):
+            station_name = StationDataHelper.get_station_name(s['id'])
+            additional_info = [v for v in (s.get('platform'), s.get('line'), s.get('destination_label_filter')) if v]
+            
+            if additional_info:
+                display_name = f"{station_name} (ID: {s['id']}) - {', '.join(additional_info)}"
+            else:
+                display_name = f"{station_name} (ID: {s['id']})"
+            
+            stations_dict[str(idx)] = display_name
 
         if user_input is not None:
             idx_to_remove = user_input["station_to_remove"]

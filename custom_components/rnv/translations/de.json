@@ -33,12 +33,12 @@
       },
       "add_station": {
         "title": "Haltestelle hinzufügen",
-        "description": "Gib die Details der hinzuzufügenden Haltestelle an.\nDie Haltestellen-ID (hafasId) findest du in einer json-Datei [hier](https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/datensaetze?id=1405&tx_vrrkit_view[dataset_name]=haltestellendaten-rnv&tx_vrrkit_view[action]=details&tx_vrrkit_view[controller]=View).",
+        "description": "Wähle eine Haltestelle aus der Liste.\nOptionale Filterung nach Steig und Linie.",
         "data": {
-          "station_id": "Haltestellen-ID (hafasId)",
+          "station_selection": "Haltestelle auswählen",
           "platform": "Steig (optional)",
-          "line": "Linie (optional)",          
-          "destination_label_filter": "Endstationsfilter (optional, siehe Dokumentation)"
+          "line": "Linie (optional)",
+          "destination_label_filter": "Endstationsfilter (Regex, optional)"
         }
       },
       "remove_station": {
@@ -51,7 +51,8 @@
     },
     "error": {
       "duplicate_station": "Diese Haltestelle-Steig-Linien Kombination ist bereits konfiguriert.",
-      "destination_label_filter_no_valid_regex": "Endstationsfilter ist ungültig, bitte einen gültigen regulären Ausdruck benutzen."
+      "no_station_selected": "Bitte wähle eine Haltestelle aus der Liste.",
+      "destination_label_filter_no_valid_regex": "Der Endstationsfilter ist kein gültiger regulärer Ausdruck."
     }
   }
 }

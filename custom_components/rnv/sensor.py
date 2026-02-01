@@ -22,6 +22,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import CLIENT_API_URL, OAUTH_URL_TEMPLATE
 from .coordinator import RNVCoordinator
+from .station_data import StationDataHelper
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +75,9 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         """Initialize the RNVBaseSensor."""
         super().__init__(coordinator)
         self._station_id = station_id
+        self._global_id = StationDataHelper.get_station_global_id(self._station_id)
+        self._station_name = StationDataHelper.get_station_name(self._station_id)
+        self._location = StationDataHelper.get_station_location(self._station_id)
         self._platform = platform or ""
         self._line = line or ""
         self._destination_label_filter = destination_label_filter or ""
@@ -140,15 +144,33 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information for the RNV station sensor."""
+        # Get station name from stops.json
+        
         # Keep backwards compatibility: only include filter hash when filter is present
         if self._destination_label_filter:
             identifiers = {(self._station_id, self._platform, self._line, "filter"+sha256(self._destination_label_filter.encode('utf-8')).hexdigest()[:8])}
         else:
             identifiers = {(self._station_id, self._platform, self._line)}
+        
+        # Build device name with station name if available
+        device_name_parts = []
+        if self._station_name:
+            device_name_parts.append(self._station_name)
+        else:
+            device_name_parts.append(f"ID {self._station_id}")
+        
+        if self._platform:
+            device_name_parts.append(f"Platform {self._platform}")
+        if self._line:
+            device_name_parts.append(f"Line {self._line}")
+        if self._destination_label_filter:
+            device_name_parts.append(f"Dest. Filter: {self._destination_label_filter}")
+            
+        device_name = " ".join(device_name_parts)
             
         return DeviceInfo(
             identifiers=identifiers,
-            name=f"RNV Station {self._station_id}{f' {self._platform}' if self._platform else ''}{f' {self._line}' if self._line else ''}{f' {self._destination_label_filter}' if self._destination_label_filter else ''}",
+            name=device_name,
             manufacturer="Rhein-Neckar-Verkehr GmbH",
             model="Live Departures",
         )
@@ -330,6 +352,15 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                     vehicle_info = RNVBaseSensor._get_vehicle_info(vehicle_number)
                     
                     journey_info = {
+                        "hafas_id": self._station_id,
+                        "global_id": self._global_id,
+                        "station_name": self._station_name,
+                        "location": self._location,
+                        "platform": platform_label,
+                        "label": journey.get("line", {})
+                        .get("lineGroup", {})
+                        .get("label"),
+                        "destination": stop.get("destinationLabel"),
                         "planned_time": stop.get("plannedDeparture", {}).get(
                             "isoString"
                         ),
@@ -337,17 +368,12 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                             "isoString"
                         ),
                         "realtime_time_local": dep_local.strftime("%H:%M"),
-                        "label": journey.get("line", {})
-                        .get("lineGroup", {})
-                        .get("label"),
-                        "destination": stop.get("destinationLabel"),
                         "cancelled": cancelled,
-                        "platform": platform_label,
+                        "time_until_departure": until_display,
                         "load_ratio": f"{round(load_ratio_raw * 100)}%"
                         if isinstance(load_ratio_raw, (float, int))
                         else None,
                         "load_type": capacity_levels.get(load_type_raw),
-                        "time_until_departure": until_display,
                         "vehicle": vehicle_number,
                         "vehicle_info": vehicle_info,
                     }
