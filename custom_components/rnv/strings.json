@@ -3,10 +3,7 @@
     "step": {
       "user": {
         "title": "RNV Public Transport",
-        "description": "Enter your tenant ID, client ID, client secret and resource.\nTo use this integration, you need access credentials for the RNV Open Data API.\nRequest access for 'GraphQL' here: [api_url]({api_url})",
-        "data_description": {
-          "api_url": "https://www.opendata-oepnv.de/ht/de/organisation/verkehrsunternehmen/rnv/openrnv/api"
-        },
+        "description": "Enter your tenant ID, client ID, client secret and resource.\nTo use this integration, you need access credentials for the RNV Open Data API.",
         "data": {
           "tenantid": "Tenant ID",
           "clientid": "Client ID",
