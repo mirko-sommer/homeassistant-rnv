@@ -39,6 +39,10 @@ _GLOBAL_VEHICLE_CACHE_LOCK = asyncio.Lock()
 # Vehicle cache file path (relative to component directory)
 VEHICLE_CACHE_FILE = "data/vehicles.json"
 
+# In-memory vehicle cache to avoid blocking file I/O
+_VEHICLE_CACHE: dict[str, dict[str, Any]] | None = None
+_VEHICLE_CACHE_LOADED = False
+
 
 class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
     """Base sensor entity for RNV departures.
@@ -78,9 +82,9 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         """Initialize the RNVBaseSensor."""
         super().__init__(coordinator)
         self._station_id = station_id
-        self._global_id = StationDataHelper.get_station_global_id(self._station_id)
-        self._station_name = StationDataHelper.get_station_name(self._station_id)
-        self._location = StationDataHelper.get_station_location(self._station_id)
+        self._global_id: str | None = None
+        self._station_name: str | None = None
+        self._location: dict[str, float] | None = None
         self._platform = platform or ""
         self._line = line or ""
         self._destination_label_filter = destination_label_filter or ""
@@ -99,6 +103,15 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         coordinator fetches fresh data.
         """
         await super().async_added_to_hass()
+        
+        # Load station data asynchronously
+        self._global_id = await StationDataHelper.get_station_global_id(self.hass, self._station_id)
+        self._station_name = await StationDataHelper.get_station_name(self.hass, self._station_id)
+        self._location = await StationDataHelper.get_station_location(self.hass, self._station_id)
+        
+        # Ensure vehicle cache is loaded
+        await self._ensure_vehicle_cache_loaded()
+        
         last_state = await self.async_get_last_state()
         if last_state is not None:
             # store raw state string and attributes for fallback
@@ -157,8 +170,10 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         
         # Build device name with station name if available
         device_name_parts = []
-        if self._station_name:
-            device_name_parts.append(self._station_name)
+        # Use cached station name if already loaded, otherwise try to get from cache
+        station_name = self._station_name or StationDataHelper.get_station_name_cached(self._station_id)
+        if station_name:
+            device_name_parts.append(station_name)
         else:
             device_name_parts.append(f"ID {self._station_id}")
         
@@ -392,10 +407,64 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         if index is not None and index < len(journeys_info):
             return journeys_info[index][1]
         return None
+    
+    @staticmethod
+    def _load_vehicle_cache_sync(cache_path: str) -> dict[str, Any]:
+        """Synchronously load vehicle cache from file.
+        
+        This is a helper method that should only be called from an executor.
+        
+        Args:
+            cache_path: Path to the vehicle cache file
+            
+        Returns:
+            Dict with vehicle cache data
+        """
+        try:
+            if os.path.exists(cache_path):
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            _LOGGER.debug("Failed to read vehicle cache: %s", e)
+        return {}
+    
+    @staticmethod
+    def _save_vehicle_cache_sync(cache_path: str, vehicle_table: dict[str, Any]) -> None:
+        """Synchronously save vehicle cache to file.
+        
+        This is a helper method that should only be called from an executor.
+        
+        Args:
+            cache_path: Path to the vehicle cache file
+            vehicle_table: Vehicle data to save
+        """
+        try:
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(vehicle_table, f, ensure_ascii=False, indent=2)
+        except OSError as e:
+            _LOGGER.debug("Failed to write vehicle cache: %s", e)
+    
+    async def _ensure_vehicle_cache_loaded(self) -> None:
+        """Ensure vehicle cache is loaded into memory from disk if it exists."""
+        global _VEHICLE_CACHE, _VEHICLE_CACHE_LOADED
+        
+        if _VEHICLE_CACHE_LOADED:
+            return
+        
+        cache_path = os.path.join(os.path.dirname(__file__), VEHICLE_CACHE_FILE)
+        
+        # Load from disk in executor
+        data = await self.hass.async_add_executor_job(
+            self._load_vehicle_cache_sync, cache_path
+        )
+        
+        _VEHICLE_CACHE = data
+        _VEHICLE_CACHE_LOADED = True
         
     @staticmethod
     def _get_vehicle_info(vehicle_number: str) -> dict[str, Any] | None:
-        """Get vehicle information from cached table file.
+        """Get vehicle information from in-memory cache.
         
         Args:
             vehicle_number: The wagon/vehicle number to look up
@@ -403,20 +472,12 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         Returns:
             Dict with vehicle information or None if not found
         """
-        if not vehicle_number:
+        global _VEHICLE_CACHE
+        
+        if not vehicle_number or _VEHICLE_CACHE is None:
             return None
         
-        cache_path = os.path.join(os.path.dirname(__file__), VEHICLE_CACHE_FILE)
-        
-        try:
-            if os.path.exists(cache_path):
-                with open(cache_path, "r", encoding="utf-8") as f:
-                    vehicle_cache = json.load(f)
-                    return vehicle_cache.get(vehicle_number)
-        except (OSError, json.JSONDecodeError) as e:
-            _LOGGER.debug("Failed to read vehicle cache: %s", e)
-        
-        return None
+        return _VEHICLE_CACHE.get(vehicle_number)
     
     @staticmethod
     def _fetch_vehicle_table_sync() -> dict[str, dict[str, Any]]:
@@ -470,7 +531,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
             
     async def _update_vehicle_table_cache(self) -> None:
         """Update the shared vehicle table cache file."""
-        global _GLOBAL_VEHICLE_CACHE_LOCK
+        global _GLOBAL_VEHICLE_CACHE_LOCK, _VEHICLE_CACHE
         
         # Use lock to prevent multiple simultaneous requests
         async with _GLOBAL_VEHICLE_CACHE_LOCK:
@@ -484,13 +545,15 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                 )
                 
                 if vehicle_table:
-                    cache_path = os.path.join(os.path.dirname(__file__), VEHICLE_CACHE_FILE)
-                    # Ensure data directory exists
-                    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                    # Update in-memory cache first
+                    _VEHICLE_CACHE = vehicle_table
                     
-                    # Write cache to file
-                    with open(cache_path, "w", encoding="utf-8") as f:
-                        json.dump(vehicle_table, f, ensure_ascii=False, indent=2)
+                    cache_path = os.path.join(os.path.dirname(__file__), VEHICLE_CACHE_FILE)
+                    
+                    # Write cache to file using executor to avoid blocking
+                    await self.hass.async_add_executor_job(
+                        self._save_vehicle_cache_sync, cache_path, vehicle_table
+                    )
                     
                     _LOGGER.debug("Vehicle table cache updated with %d entries", len(vehicle_table))
                 else:

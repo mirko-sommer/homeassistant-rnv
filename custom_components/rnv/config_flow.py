@@ -372,7 +372,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
         errors = {}
         
         # Load station data for dropdown
-        available_stations = StationDataHelper.load_station_data()
+        available_stations = await StationDataHelper.load_station_data(self.hass)
         
         if user_input is not None:
             # Get station ID from dropdown selection
@@ -436,7 +436,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
 
         stations_dict = {}
         for idx, s in enumerate(self.stations):
-            station_name = StationDataHelper.get_station_name(s['id'])
+            station_name = await StationDataHelper.get_station_name(self.hass, s['id'])
             additional_info = [v for v in (s.get('platform'), s.get('line'), s.get('destination_label_filter')) if v]
             
             if additional_info:
