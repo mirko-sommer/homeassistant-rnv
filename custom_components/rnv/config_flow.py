@@ -15,7 +15,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
-from .const import CLIENT_API_URL, DOMAIN, OAUTH_URL_TEMPLATE
+from .const import CLIENT_API_URL, CONF_USE_VRN, DOMAIN, OAUTH_URL_TEMPLATE
 from .data_hub_python_client.ClientFunctions import ClientFunctions
 from .station_data import StationDataHelper
 
@@ -386,6 +386,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                     "platform": user_input.get("platform", ""),
                     "line": user_input.get("line", ""),
                     "destination_label_filter": user_input.get("destination_label_filter", ""),
+                    CONF_USE_VRN: user_input.get(CONF_USE_VRN, False),
                 }
                 
                 # Prevent duplicates
@@ -395,6 +396,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                         and s.get("platform", "") == new_station["platform"]
                         and s.get("line", "") == new_station["line"]
                         and s.get("destination_label_filter", "") == new_station["destination_label_filter"]
+                        and s.get(CONF_USE_VRN, False) == new_station[CONF_USE_VRN]
                     ):
                         errors["base"] = "duplicate_station"
                         break
@@ -402,7 +404,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 # Check if regex is compilable, so we don't crash later.     
                 try:
                     re.compile(new_station["destination_label_filter"])
-                except:
+                except re.error:
                     errors["base"] = "destination_label_filter_no_valid_regex"
                     
                 if not errors:
@@ -415,6 +417,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     vol.Required("station_selection"): vol.In(available_stations),
                     vol.Optional("platform", default=""): str,
+                    vol.Optional(CONF_USE_VRN, default=False): bool,
                     vol.Optional("line", default=""): str,
                     vol.Optional("destination_label_filter", default=""): str,
             }

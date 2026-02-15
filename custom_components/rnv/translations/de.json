@@ -38,7 +38,8 @@
           "station_selection": "Haltestelle auswählen",
           "platform": "Steig (optional)",
           "line": "Linie (optional)",
-          "destination_label_filter": "Endstationsfilter (Regex, optional)"
+          "destination_label_filter": "Endstationsfilter (Regex, optional)",
+          "use_vrn": "VRN-Abfahrten verwenden (kann unzuverlässig sein)"
         }
       },
       "remove_station": {

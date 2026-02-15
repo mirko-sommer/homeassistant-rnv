@@ -22,7 +22,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import CLIENT_API_URL, OAUTH_URL_TEMPLATE
+from .const import CLIENT_API_URL, CONF_USE_VRN, OAUTH_URL_TEMPLATE
 from .coordinator import RNVCoordinator
 from .station_data import StationDataHelper
 
@@ -78,6 +78,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         line: str,
         destination_label_filter: str, 
         departure_index: int,
+        use_vrn: bool = False,
     ) -> None:
         """Initialize the RNVBaseSensor."""
         super().__init__(coordinator)
@@ -89,6 +90,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         self._line = line or ""
         self._destination_label_filter = destination_label_filter or ""
         self._departure_index = departure_index
+        self._use_vrn = use_vrn
         # restored state/attributes populated in async_added_to_hass
         self._restored_state: str | None = None
         self._restored_attributes: dict[str, Any] | None = None
@@ -163,10 +165,16 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         # Get station name from stations.json
         
         # Keep backwards compatibility: only include filter hash when filter is present
-        if self._destination_label_filter:
-            identifiers = {(self._station_id, self._platform, self._line, "filter"+sha256(self._destination_label_filter.encode('utf-8')).hexdigest()[:8])}
+        if self._use_vrn:
+            if self._destination_label_filter:
+                identifiers = {(self._station_id, self._platform, self._line, "filter"+sha256(self._destination_label_filter.encode('utf-8')).hexdigest()[:8]), "vrn"}
+            else:
+                identifiers = {(self._station_id, self._platform, self._line, "vrn")}
         else:
-            identifiers = {(self._station_id, self._platform, self._line)}
+            if self._destination_label_filter:
+                identifiers = {(self._station_id, self._platform, self._line, "filter"+sha256(self._destination_label_filter.encode('utf-8')).hexdigest()[:8])}
+            else:
+                identifiers = {(self._station_id, self._platform, self._line)}
         
         # Build device name with station name if available
         device_name_parts = []
@@ -183,6 +191,8 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
             device_name_parts.append(f"Line {self._line}")
         if self._destination_label_filter:
             device_name_parts.append(f"Dest. Filter: {self._destination_label_filter}")
+        if self._use_vrn:
+            device_name_parts.append("(+VRN)")
             
         device_name = " ".join(device_name_parts)
             
@@ -239,6 +249,13 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
 
     def _extract_departure(self, index: int) -> str | None:
         """Extract the ISO formatted departure time at the given index."""
+        if self._use_vrn:
+            # When VRN is enabled, combine both RNV and VRN departures
+            return self._extract_combined_departure(index)
+        return self._extract_rnv_departure(index)
+    
+    def _extract_rnv_departure(self, index: int) -> str | None:
+        """Extract the ISO formatted departure time at the given index from RNV data."""
         try:
             elements = self.coordinator.data["data"]["station"]["journeys"]["elements"]
         except (KeyError, TypeError):
@@ -250,8 +267,6 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         # as past and not considered an upcoming departure
         earliest_allowed = now_utc - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
         departures = []
-
-        language = (self.hass.config.language or "en").lower()
 
         for journey in elements:
             filtered_stops = self._get_desired_stops(journey)
@@ -292,9 +307,156 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
         if index is not None and index < len(departures):
             return departures[index].isoformat()
         return None
+    
+    def _extract_vrn_departure(self, index: int) -> str | None:
+        """Extract the ISO formatted departure time at the given index from VRN data."""
+        try:
+            vrn_stops = self.coordinator.data["data"]["vrnStops"]
+        except (KeyError, TypeError):
+            return None
+
+        now_utc = datetime.now(UTC)
+        earliest_allowed = now_utc - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
+        departures = []
+
+        for stop in vrn_stops:
+            service = stop.get("service", {})
+            
+            # Apply platform filter if specified
+            if self._platform and stop.get("platform") != self._platform:
+                continue
+            
+            # Apply line filter if specified
+            if self._line and service.get("label") != self._line:
+                continue
+            
+            # Apply destination filter if specified
+            if self._destination_label_filter:
+                destination_label = service.get("destinationLabel", "")
+                re_destination_label_filter = re.compile(self._destination_label_filter)
+                if not re_destination_label_filter.search(destination_label):
+                    continue
+            
+            # Get departure time (estimated or timetabled)
+            dep_str = stop.get("estimatedTime", {}).get("isoString") or stop.get("timetabledTime", {}).get("isoString")
+            if not dep_str:
+                continue
+            
+            try:
+                dep_time = datetime.fromisoformat(dep_str)
+            except ValueError:
+                continue
+            
+            # Check for cancellation
+            cancelled = service.get("cancelled", False)
+            
+            # include departures that are in the future or within the
+            # allowed past window; always include cancelled services
+            if dep_time >= earliest_allowed or cancelled:
+                departures.append(dep_time)
+        
+        departures.sort()
+        if index is not None and index < len(departures):
+            return departures[index].isoformat()
+        return None
+    
+    def _extract_combined_departure(self, index: int) -> str | None:
+        """Extract the ISO formatted departure time at the given index from combined RNV and VRN data."""
+        now_utc = datetime.now(UTC)
+        earliest_allowed = now_utc - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
+        departures = []
+
+        # Extract RNV departures
+        try:
+            elements = self.coordinator.data["data"]["station"]["journeys"]["elements"]
+            for journey in elements:
+                filtered_stops = self._get_desired_stops(journey)
+                
+                for stop in filtered_stops:
+                    platform_label = stop.get("pole", {}).get("platform", {}).get("label")
+                    line = journey.get("line", {}).get("lineGroup", {}).get("label")
+
+                    if self._platform and platform_label != self._platform:
+                        continue
+
+                    if self._line and line != self._line:
+                        continue
+
+                    dep_str = stop.get("realtimeDeparture", {}).get(
+                        "isoString"
+                    ) or stop.get("plannedDeparture", {}).get("isoString")
+                    if not dep_str:
+                        continue
+
+                    try:
+                        dep_time = datetime.fromisoformat(dep_str)
+                    except ValueError:
+                        continue
+
+                    # Check if destination label indicates cancellation
+                    destination_label = stop.get("destinationLabel", "")
+                    cancelled = journey.get("cancelled", False)
+                    if destination_label.strip().lower() == "entfällt":
+                        cancelled = True
+
+                    if dep_time >= earliest_allowed or cancelled:
+                        departures.append(dep_time)
+        except (KeyError, TypeError):
+            pass  # RNV data not available, continue with VRN only
+
+        # Extract VRN departures
+        try:
+            vrn_stops = self.coordinator.data["data"]["vrnStops"]
+            for stop in vrn_stops:
+                service = stop.get("service", {})
+                
+                # Apply platform filter if specified
+                if self._platform and stop.get("platform") != self._platform:
+                    continue
+                
+                # Apply line filter if specified
+                if self._line and service.get("label") != self._line:
+                    continue
+                
+                # Apply destination filter if specified
+                if self._destination_label_filter:
+                    destination_label = service.get("destinationLabel", "")
+                    re_destination_label_filter = re.compile(self._destination_label_filter)
+                    if not re_destination_label_filter.search(destination_label):
+                        continue
+                
+                # Get departure time (estimated or timetabled)
+                dep_str = stop.get("estimatedTime", {}).get("isoString") or stop.get("timetabledTime", {}).get("isoString")
+                if not dep_str:
+                    continue
+                
+                try:
+                    dep_time = datetime.fromisoformat(dep_str)
+                except ValueError:
+                    continue
+                
+                # Check for cancellation
+                cancelled = service.get("cancelled", False)
+                
+                if dep_time >= earliest_allowed or cancelled:
+                    departures.append(dep_time)
+        except (KeyError, TypeError):
+            pass  # VRN data not available, continue with RNV only
+        
+        departures.sort()
+        if index is not None and index < len(departures):
+            return departures[index].isoformat()
+        return None
 
     def _extract_journey_info(self, index: int) -> dict[str, Any] | None:
         """Extract journey info with only realtime and planned times at given index."""
+        if self._use_vrn:
+            # When VRN is enabled, combine both RNV and VRN journey info
+            return self._extract_combined_journey_info(index)
+        return self._extract_rnv_journey_info(index)
+    
+    def _extract_rnv_journey_info(self, index: int) -> dict[str, Any] | None:
+        """Extract journey info from RNV data at given index."""
         try:
             elements = self.coordinator.data["data"]["station"]["journeys"]["elements"]
         except (KeyError, TypeError):
@@ -374,6 +536,7 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                     vehicle_info = RNVBaseSensor._get_vehicle_info(vehicle_number)
                     
                     journey_info = {
+                        "data_source": "RNV",
                         "hafas_id": self._station_id,
                         "global_id": self._global_id,
                         "station_name": self._station_name,
@@ -401,6 +564,304 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
                         "vehicle_info": vehicle_info,
                     }
                     journeys_info.append((dep_time, journey_info))
+
+        journeys_info.sort(key=lambda tup: tup[0])
+
+        if index is not None and index < len(journeys_info):
+            return journeys_info[index][1]
+        return None
+    
+    def _extract_vrn_journey_info(self, index: int) -> dict[str, Any] | None:
+        """Extract journey info from VRN data at given index."""
+        try:
+            vrn_stops = self.coordinator.data["data"]["vrnStops"]
+        except (KeyError, TypeError):
+            return None
+
+        now_utc = datetime.now(UTC)
+        earliest_allowed = now_utc - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
+        journeys_info = []
+        language = (self.hass.config.language or "en").lower()
+
+        for stop in vrn_stops:
+            service = stop.get("service", {})
+            
+            # Apply platform filter if specified
+            if self._platform and stop.get("platform") != self._platform:
+                continue
+            
+            # Apply line filter if specified
+            if self._line and service.get("label") != self._line:
+                continue
+            
+            # Apply destination filter if specified
+            if self._destination_label_filter:
+                destination_label = service.get("destinationLabel", "")
+                re_destination_label_filter = re.compile(self._destination_label_filter)
+                if not re_destination_label_filter.search(destination_label):
+                    continue
+            
+            # Get departure time (estimated or timetabled)
+            dep_str = stop.get("estimatedTime", {}).get("isoString") or stop.get("timetabledTime", {}).get("isoString")
+            if not dep_str:
+                continue
+            
+            try:
+                dep_time = datetime.fromisoformat(dep_str)
+            except ValueError:
+                continue
+            
+            # Check for cancellation
+            cancelled = service.get("cancelled", False)
+            
+            # include departures that are in the future or within the
+            # allowed past window; always include cancelled services
+            if dep_time >= earliest_allowed or cancelled:
+                dep_local = dt_util.as_local(dep_time)
+
+                if cancelled:
+                    until_display = (
+                        "entfällt" if language.startswith("de") else "cancelled"
+                    )
+                else:
+                    diff_seconds = int((dep_time - now_utc).total_seconds())
+                    minutes_remaining = max(0, diff_seconds // 60)
+                    if minutes_remaining >= 60:
+                        until_display = dep_local.strftime("%H:%M")
+                    elif minutes_remaining > 0:
+                        until_display = f"{minutes_remaining} min"
+                    else:
+                        until_display = (
+                            "sofort" if language.startswith("de") else "now"
+                        )
+                
+                journey_info = {
+                    "data_source": "RNV+VRN",
+                    "hafas_id": self._station_id,
+                    "global_id": self._global_id,
+                    "station_name": self._station_name,
+                    "location": self._location,
+                    "platform": stop.get("platform"),
+                    "label": service.get("label"),
+                    "destination_filter": self._destination_label_filter if self._destination_label_filter else None,
+                    "destination": service.get("destinationLabel"),
+                    "planned_time": stop.get("timetabledTime", {}).get("isoString"),
+                    "realtime_time": stop.get("estimatedTime", {}).get("isoString"),
+                    "realtime_time_local": dep_local.strftime("%H:%M"),
+                    "cancelled": cancelled,
+                    "time_until_departure": until_display,
+                    "service_type": service.get("type"),
+                    "vrn_type": service.get("vrnType"),
+                    "vrn_sub_type": service.get("vrnSubType"),
+                    "service_name": service.get("name"),
+                    "service_description": service.get("description"),
+                    "service_notes": service.get("notes"),
+                    "product_type": service.get("productType"),
+                    "load_ratio": None,  # VRN doesn't provide load data
+                    "load_type": None,
+                    "vehicle": None,  # VRN doesn't provide vehicle numbers
+                    "vehicle_info": None,
+                }
+                journeys_info.append((dep_time, journey_info))
+
+        journeys_info.sort(key=lambda tup: tup[0])
+
+        if index is not None and index < len(journeys_info):
+            return journeys_info[index][1]
+        return None
+    
+    def _extract_combined_journey_info(self, index: int) -> dict[str, Any] | None:
+        """Extract journey info from combined RNV and VRN data at given index."""
+        now_utc = datetime.now(UTC)
+        earliest_allowed = now_utc - timedelta(minutes=RNV_DEPARTURE_VALID_MINUTES)
+        journeys_info = []
+        language = (self.hass.config.language or "en").lower()
+
+        capacity_levels = {
+            "NA": "Nicht vorhanden",
+            "I": "I - empty - leer",
+            "II": "II - light - mittel-voll",
+            "III": "III - full - voll",
+        }
+
+        # Extract RNV journey info
+        try:
+            elements = self.coordinator.data["data"]["station"]["journeys"]["elements"]
+            for journey in elements:
+                filtered_stops = self._get_desired_stops(journey)
+                for stop in filtered_stops:
+                    platform_label = stop.get("pole", {}).get("platform", {}).get("label")
+                    line = journey.get("line", {}).get("lineGroup", {}).get("label")
+
+                    if self._platform and platform_label != self._platform:
+                        continue
+
+                    if self._line and line != self._line:
+                        continue
+
+                    dep_str = stop.get("realtimeDeparture", {}).get(
+                        "isoString"
+                    ) or stop.get("plannedDeparture", {}).get("isoString")
+                    if not dep_str:
+                        continue
+
+                    try:
+                        dep_time = datetime.fromisoformat(dep_str)
+                    except ValueError:
+                        continue
+
+                    # Check if destination label indicates cancellation
+                    destination_label = stop.get("destinationLabel", "")
+                    cancelled = journey.get("cancelled", False)
+                    if destination_label.strip().lower() == "entfällt":
+                        cancelled = True
+
+                    if dep_time >= earliest_allowed or cancelled:
+                        loads = journey.get("loads", [{}])
+                        load_type_raw = loads[0].get("loadType")
+                        load_ratio_raw = loads[0].get("ratio")
+                        dep_local = dt_util.as_local(dep_time)
+
+                        if cancelled:
+                            until_display = (
+                                "entfällt" if language.startswith("de") else "cancelled"
+                            )
+                        else:
+                            diff_seconds = int((dep_time - now_utc).total_seconds())
+                            minutes_remaining = max(0, diff_seconds // 60)
+                            if minutes_remaining >= 60:
+                                until_display = dep_local.strftime("%H:%M")
+                            elif minutes_remaining > 0:
+                                until_display = f"{minutes_remaining} min"
+                            else:
+                                until_display = (
+                                    "sofort" if language.startswith("de") else "now"
+                                )
+
+                        vehicle_number = journey.get("vehicles", [None])[0] if journey.get("vehicles") else None
+                        
+                        # Trigger table fetch if expired
+                        if RNVBaseSensor._is_vehicle_table_expired():
+                            self.hass.async_create_task(self._update_vehicle_table_cache())
+
+                        # Get vehicle info from cached table
+                        vehicle_info = RNVBaseSensor._get_vehicle_info(vehicle_number)
+                        
+                        journey_info = {
+                            "data_source": "RNV",
+                            "hafas_id": self._station_id,
+                            "global_id": self._global_id,
+                            "station_name": self._station_name,
+                            "location": self._location,
+                            "platform": platform_label,
+                            "label": journey.get("line", {})
+                            .get("lineGroup", {})
+                            .get("label"),
+                            "destination_filter": self._destination_label_filter if self._destination_label_filter else None,
+                            "destination": stop.get("destinationLabel"),
+                            "planned_time": stop.get("plannedDeparture", {}).get(
+                                "isoString"
+                            ),
+                            "realtime_time": stop.get("realtimeDeparture", {}).get(
+                                "isoString"
+                            ),
+                            "realtime_time_local": dep_local.strftime("%H:%M"),
+                            "cancelled": cancelled,
+                            "time_until_departure": until_display,
+                            "load_ratio": f"{round(load_ratio_raw * 100)}%"
+                            if isinstance(load_ratio_raw, (float, int))
+                            else None,
+                            "load_type": capacity_levels.get(load_type_raw),
+                            "vehicle": vehicle_number,
+                            "vehicle_info": vehicle_info,
+                        }
+                        journeys_info.append((dep_time, journey_info))
+        except (KeyError, TypeError):
+            pass  # RNV data not available, continue with VRN only
+
+        # Extract VRN journey info
+        try:
+            vrn_stops = self.coordinator.data["data"]["vrnStops"]
+            for stop in vrn_stops:
+                service = stop.get("service", {})
+                
+                # Apply platform filter if specified
+                if self._platform and stop.get("platform") != self._platform:
+                    continue
+                
+                # Apply line filter if specified
+                if self._line and service.get("label") != self._line:
+                    continue
+                
+                # Apply destination filter if specified
+                if self._destination_label_filter:
+                    destination_label = service.get("destinationLabel", "")
+                    re_destination_label_filter = re.compile(self._destination_label_filter)
+                    if not re_destination_label_filter.search(destination_label):
+                        continue
+                
+                # Get departure time (estimated or timetabled)
+                dep_str = stop.get("estimatedTime", {}).get("isoString") or stop.get("timetabledTime", {}).get("isoString")
+                if not dep_str:
+                    continue
+                
+                try:
+                    dep_time = datetime.fromisoformat(dep_str)
+                except ValueError:
+                    continue
+                
+                # Check for cancellation
+                cancelled = service.get("cancelled", False)
+                
+                if dep_time >= earliest_allowed or cancelled:
+                    dep_local = dt_util.as_local(dep_time)
+
+                    if cancelled:
+                        until_display = (
+                            "entfällt" if language.startswith("de") else "cancelled"
+                        )
+                    else:
+                        diff_seconds = int((dep_time - now_utc).total_seconds())
+                        minutes_remaining = max(0, diff_seconds // 60)
+                        if minutes_remaining >= 60:
+                            until_display = dep_local.strftime("%H:%M")
+                        elif minutes_remaining > 0:
+                            until_display = f"{minutes_remaining} min"
+                        else:
+                            until_display = (
+                                "sofort" if language.startswith("de") else "now"
+                            )
+                    
+                    journey_info = {
+                        "data_source": "VRN",
+                        "hafas_id": self._station_id,
+                        "global_id": self._global_id,
+                        "station_name": self._station_name,
+                        "location": self._location,
+                        "platform": stop.get("platform"),
+                        "label": service.get("label"),
+                        "destination_filter": self._destination_label_filter if self._destination_label_filter else None,
+                        "destination": service.get("destinationLabel"),
+                        "planned_time": stop.get("timetabledTime", {}).get("isoString"),
+                        "realtime_time": stop.get("estimatedTime", {}).get("isoString"),
+                        "realtime_time_local": dep_local.strftime("%H:%M"),
+                        "cancelled": cancelled,
+                        "time_until_departure": until_display,
+                        "service_type": service.get("type"),
+                        "vrn_type": service.get("vrnType"),
+                        "vrn_sub_type": service.get("vrnSubType"),
+                        "service_name": service.get("name"),
+                        "service_description": service.get("description"),
+                        "service_notes": service.get("notes"),
+                        "product_type": service.get("productType"),
+                        "load_ratio": None,
+                        "load_type": None,
+                        "vehicle": None,
+                        "vehicle_info": None,
+                    }
+                    journeys_info.append((dep_time, journey_info))
+        except (KeyError, TypeError):
+            pass  # VRN data not available, continue with RNV only
 
         journeys_info.sort(key=lambda tup: tup[0])
 
@@ -565,7 +1026,8 @@ class RNVBaseSensor(CoordinatorEntity[RNVCoordinator], RestoreEntity):
     def _unique_base_id(self) -> str:
         """Return a unique base ID for derived classes to amend."""
         dst_hash ="filter"+sha256(self._destination_label_filter.encode('utf-8')).hexdigest()[:8]
-        return f"rnv_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}{f'_{dst_hash}' if self._destination_label_filter else ''}"
+        prefix = "vrn" if self._use_vrn else "rnv"
+        return f"{prefix}_{self._station_id}{f'_{self._platform}' if self._platform else ''}{f'_{self._line}' if self._line else ''}{f'_{dst_hash}' if self._destination_label_filter else ''}"
 
 
 class RNVNextDepartureSensor(RNVBaseSensor):
@@ -682,7 +1144,20 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
         station_id = station["id"]
         platform = station.get("platform", "")
         line = station.get("line", "")
-        destination_label_filter = station.get("destination_label_filter", "") 
+        destination_label_filter = station.get("destination_label_filter", "")
+        use_vrn = station.get(CONF_USE_VRN, False)
+        
+        # Get global_id if using VRN
+        global_id = None
+        if use_vrn:
+            global_id = await StationDataHelper.get_station_global_id(hass, station_id)
+            if not global_id:
+                _LOGGER.warning(
+                    "Station %s configured for VRN but has no globalID. Falling back to RNV-only mode.",
+                    station_id
+                )
+                # Fallback to RNV-only mode
+                use_vrn = False
 
         coordinator = RNVCoordinator(
             hass,
@@ -692,6 +1167,8 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
             platform,
             line,
             entry,
+            use_vrn=use_vrn,
+            global_id=global_id,
         )
         # Do not await coordinator.async_refresh() here; let it fetch in the background
 
@@ -703,6 +1180,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 line,
                 destination_label_filter, 
                 departure_index=0,
+                use_vrn=use_vrn,
             )
         )
         entities.append(
@@ -713,6 +1191,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 line,
                 destination_label_filter,                 
                 departure_index=1,
+                use_vrn=use_vrn,
             )
         )
         entities.append(
@@ -723,6 +1202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
                 line,
                 destination_label_filter,             
                 departure_index=2,
+                use_vrn=use_vrn,
             )
         )
 

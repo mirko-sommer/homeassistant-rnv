@@ -38,7 +38,8 @@
           "station_selection": "Select Station",
           "platform": "Platform (optional)",
           "line": "Line (optional)",
-          "destination_label_filter": "Destination Filter (regex, optional)"
+          "destination_label_filter": "Destination Filter (regex, optional)",
+          "use_vrn": "Use VRN departures (can be unreliable)"
         }
       },
       "remove_station": {
