@@ -13,6 +13,10 @@ from requests.exceptions import RequestException, SSLError, Timeout
 _LOGGER = logging.getLogger(__name__)
 
 
+class ExpiredClientSecretError(Exception):
+    """Raised when Azure reports an expired or invalid client secret."""
+
+
 class ClientFunctions:
     """Functions for interacting with the RNV data hub API."""
 
@@ -51,6 +55,28 @@ class ClientFunctions:
             _LOGGER.error("Request timed out while requesting access token")
             raise
         except RequestException as e:
+            response = getattr(e, "response", None)
+            response_text = ""
+            if response is not None:
+                response_text = getattr(response, "text", "") or ""
+                if not response_text:
+                    try:
+                        response_text = json.dumps(response.json())
+                    except ValueError:
+                        response_text = ""
+
+            if response is not None and response.status_code == 401 and (
+                "AADSTS7000222" in response_text
+                or "AADSTS7000215" in response_text
+                or "AADSTS50034" in response_text
+                or "invalid_client" in response_text
+                or "invalid_grant" in response_text
+            ):
+                _LOGGER.warning("Azure client secret is expired or invalid")
+                raise ExpiredClientSecretError(
+                    "Azure client secret is expired or invalid"
+                ) from e
+
             _LOGGER.error(
                 "HTTP error while requesting access token: %s — %s",
                 e,

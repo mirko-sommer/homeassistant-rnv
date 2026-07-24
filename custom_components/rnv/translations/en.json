@@ -10,16 +10,28 @@
           "clientsecret": "Client Secret",
           "resource": "Resource"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure RNV Public Transport",
+        "description": "Update your tenant ID, client ID, client secret and resource.\nExisting station settings will stay unchanged.",
+        "data": {
+          "tenantid": "Tenant ID",
+          "clientid": "Client ID",
+          "clientsecret": "Client Secret",
+          "resource": "Resource"
+        }
       }
     },
     "error": {
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "unknown": "[%key:common::config_flow::error::unknown%]",
+      "cannot_connect": "Unable to connect to the RNV service. Please try again later.",
+      "invalid_auth": "The provided credentials are invalid. Please check the tenant ID, client ID, client secret, and resource.",
+      "invalid_auth_reconfigure": "The provided credentials are invalid. Please check the tenant ID, client ID, client secret, and resource.",
+      "unknown": "An unexpected error occurred. Please try again.",
       "invalid_format": "Remove prefixes like clientID= and trailing spaces from the value."
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "This device is already configured.",
+      "reauth_successful": "The credentials were updated successfully. It takes a few minutes until the sensors are updated and working!"
     }
   },
   "options": {

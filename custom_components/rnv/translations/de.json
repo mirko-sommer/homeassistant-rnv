@@ -10,16 +10,28 @@
           "clientsecret": "Client Secret",
           "resource": "Resource"
         }
+      },
+      "reconfigure": {
+        "title": "RNV - Öffentlicher Verkehr neu konfigurieren",
+        "description": "Aktualisiere deine Tenant-ID, Client-ID, dein Client-Secret und die Resource.\nVorhandene Stationseinstellungen bleiben unverändert.",
+        "data": {
+          "tenantid": "Tenant ID",
+          "clientid": "Client ID",
+          "clientsecret": "Client Secret",
+          "resource": "Resource"
+        }
       }
     },
     "error": {
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "unknown": "[%key:common::config_flow::error::unknown%]",
+      "cannot_connect": "Es konnte keine Verbindung zum RNV-Dienst hergestellt werden. Bitte versuche es später erneut.",
+      "invalid_auth": "Die angegebenen Zugangsdaten sind ungültig. Bitte prüfe Tenant-ID, Client-ID, Client-Secret und Resource.",
+      "invalid_auth_reconfigure": "Die angegebenen Zugangsdaten sind ungültig. Bitte prüfe Tenant-ID, Client-ID, Client-Secret und Resource.",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuche es erneut.",
       "invalid_format": "Entferne Präfixe wie clientID= sowie Leerzeichen am Ende."
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "Dieses Gerät ist bereits konfiguriert.",
+      "reauth_successful": "Die Zugangsdaten wurden erfolgreich aktualisiert. Es dauert ein paar Minuten, bis die Sensoren aktualisiert sind und funktionieren!"
     }
   },
   "options": {

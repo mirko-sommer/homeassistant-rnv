@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
-import re
 
 import voluptuous as vol
-
-from homeassistant import config_entries
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
@@ -37,6 +35,21 @@ prefixes_by_field: dict[str, tuple[str, ...]] = {
     "resource": ("resource=",),
 }
 
+
+def build_auth_schema(initial_data: dict[str, Any] | None = None) -> vol.Schema:
+    """Build the auth form schema, optionally prefilled with existing values."""
+    initial_data = initial_data or {}
+    return vol.Schema(
+        {
+            vol.Required("tenantid", default=initial_data.get("tenantid", "")): str,
+            vol.Required("clientid", default=initial_data.get("clientid", "")): str,
+            vol.Required("clientsecret", default=initial_data.get("clientsecret", "")): str,
+            vol.Required("resource", default=initial_data.get("resource", "")): str,
+        }
+    )
+
+
+STEP_USER_DATA_SCHEMA = build_auth_schema()
 
 class InvalidCredentialFormat(HomeAssistantError):
     """Error raised when a credential contains unexpected formatting."""
@@ -109,6 +122,11 @@ class RnvHub:
         except HomeAssistantError as err:
             _LOGGER.error("Authentication failed: %s", err)
             return None
+        except Exception as err:
+            if type(err).__name__ == "ExpiredClientSecretError":
+                _LOGGER.error("Authentication failed: %s", err)
+                return None
+            raise
         else:
             return at_info
 
@@ -135,14 +153,6 @@ class RnvHub:
         if self.at_info:
             return self.at_info.get("access_token")
         return None
-
-    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
-        """Handle re-authentication flow."""
-        self._reauth_entry = self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
-        )
-        self._entry_data = entry_data
-        return await self.async_step_user()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -195,6 +205,43 @@ class RnvHub:
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle manual reconfiguration of the stored auth data."""
+        errors: dict[str, str] = {}
+        reconfigure_entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            sanitized: dict[str, Any] = {}
+            for key, raw_value in user_input.items():
+                try:
+                    sanitized[key] = sanitize_credential(key, raw_value)
+                except InvalidCredentialFormat:
+                    errors[key] = "invalid_format"
+
+            if not errors:
+                try:
+                    info = await validate_input(self.hass, sanitized)
+                except CannotConnect:
+                    errors["base"] = "cannot_connect"
+                except InvalidAuth:
+                    errors["base"] = "invalid_auth"
+                except Exception:
+                    _LOGGER.exception("Unexpected exception")
+                    errors["base"] = "unknown"
+                else:
+                    return self.async_update_reload_and_abort(
+                        reconfigure_entry,
+                        data_updates=sanitized | {"at_info": info["at_info"]},
+                    )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=build_auth_schema(reconfigure_entry.data),
+            errors=errors,
         )
 
 
@@ -274,6 +321,93 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle manual reconfiguration of the stored auth data."""
+        errors: dict[str, str] = {}
+        reconfigure_entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            sanitized: dict[str, Any] = {}
+            for key, raw_value in user_input.items():
+                try:
+                    sanitized[key] = sanitize_credential(key, raw_value)
+                except InvalidCredentialFormat:
+                    errors[key] = "invalid_format"
+
+            if not errors:
+                try:
+                    info = await validate_input(self.hass, sanitized)
+                except CannotConnect:
+                    errors["base"] = "cannot_connect"
+                except InvalidAuth:
+                    errors["base"] = "invalid_auth_reconfigure"
+                except Exception:
+                    _LOGGER.exception("Unexpected exception")
+                    errors["base"] = "unknown"
+                else:
+                    self.hass.config_entries.async_update_entry(
+                        reconfigure_entry,
+                        data=sanitized | {"at_info": info["at_info"]},
+                    )
+                    await self.hass.config_entries.async_reload(reconfigure_entry.entry_id)
+                    return self.async_abort(reason="reauth_successful")
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=build_auth_schema(reconfigure_entry.data),
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle re-authentication for an existing config entry."""
+        errors: dict[str, str] = {}
+        reauth_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+
+        if not hasattr(self, "_reauth_started"):
+            self._reauth_started = True
+            self._reauth_entry = reauth_entry
+            return self.async_show_form(
+                step_id="reauth",
+                data_schema=build_auth_schema(reauth_entry.data),
+                errors=errors,
+            )
+
+        if user_input is not None:
+            sanitized: dict[str, Any] = {}
+            for key, raw_value in user_input.items():
+                try:
+                    sanitized[key] = sanitize_credential(key, raw_value)
+                except InvalidCredentialFormat:
+                    errors[key] = "invalid_format"
+
+            if not errors:
+                try:
+                    info = await validate_input(self.hass, sanitized)
+                except CannotConnect:
+                    errors["base"] = "cannot_connect"
+                except InvalidAuth:
+                    errors["base"] = "invalid_auth"
+                except Exception:
+                    _LOGGER.exception("Unexpected exception")
+                    errors["base"] = "unknown"
+                else:
+                    self.hass.config_entries.async_update_entry(
+                        reauth_entry,
+                        data=sanitized | {"at_info": info["at_info"]},
+                    )
+                    await self.hass.config_entries.async_reload(reauth_entry.entry_id)
+                    return self.async_abort(reason="reauth_successful")
+
+        return self.async_show_form(
+            step_id="reauth",
+            data_schema=build_auth_schema(reauth_entry.data),
+            errors=errors,
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
@@ -296,7 +430,7 @@ class InvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""
 
 
-class RnvOptionsFlowHandler(config_entries.OptionsFlow):
+class RnvOptionsFlowHandler(OptionsFlow):
     """Options flow handler for the RNV Public Transport integration.
 
     Manages adding and removing stations for the integration via the options flow.
@@ -402,7 +536,7 @@ class RnvOptionsFlowHandler(config_entries.OptionsFlow):
                 # Check if regex is compilable, so we don't crash later.     
                 try:
                     re.compile(new_station["destination_label_filter"])
-                except:
+                except re.error:
                     errors["base"] = "destination_label_filter_no_valid_regex"
                     
                 if not errors:

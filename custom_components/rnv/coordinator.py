@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 import logging
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .data_hub_python_client.ClientFunctions import ClientFunctions
+from .data_hub_python_client.ClientFunctions import (
+    ClientFunctions,
+    ExpiredClientSecretError,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +39,7 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._platform = platform
         self._line = line
         self._options = options
+        self._config_entry = config_entry
 
         # Poll every 60 seconds (cloud service minimum)
         super().__init__(
@@ -54,6 +59,11 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 new_at_info = await self.hass.async_add_executor_job(
                     self._client.request_access_token
                 )
+            except ExpiredClientSecretError as err:
+                self._config_entry.async_start_reauth(self.hass)
+                raise ConfigEntryAuthFailed(
+                    "RNV credentials are expired or invalid"
+                ) from err
             except Exception as err:
                 # Treat token retrieval errors as transient update failures
                 # so the sensor preserves its previous state
@@ -85,7 +95,6 @@ class RNVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         current_utc_offset = (
             end_time.replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
         )
-
         query = f"""query {{
             station(id: "{self._station_id}") {{
                 hafasID
