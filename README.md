@@ -94,6 +94,23 @@ Select a station from your saved list to remove it (this also deletes associated
 #### **Save and exit:**  
 Apply your changes and close the options menu.
 
+## Re-Authentication (update API credentials)
+
+If your API key has already expired, Home Assistant will automatically start the re-authentication flow.
+
+If you obtain a new API key before the old one expires you can update it proactively:
+
+1. Go to **Settings → Devices & Services**.
+2. Find **RNV Public Transport** and click the **⋮ (three dots)** menu.
+3. Choose **Reconfigure**.
+4. Enter your new `tenantID`, `clientID`, `clientSecret` and `resource`, then click **Save**.
+
+Notes:
+- **Stations preserved:** Reconfiguring only updates the integration credentials. Your configured stations and options are preserved.
+- **Reload & delay:** After a successful update the integration reloads; it may take a few minutes for sensors to refresh and show realtime data.
+- **Invalid credentials:** If you enter incorrect credentials the flow will show an error.
+
+
 ## Examples
 Below are two examples showing upcoming RNV public transport departures in Home Assistant:
 
